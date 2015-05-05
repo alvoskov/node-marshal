@@ -32,3 +32,4 @@ EOS
 	s.extra_rdoc_files = ['README.rdoc']
 	s.rdoc_options << '--main' << 'README.rdoc'
 end
+
