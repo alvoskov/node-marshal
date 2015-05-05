@@ -1,0 +1,27 @@
+#!/usr/bin/ruby
+require_relative '../lib/node-marshal.rb'
+
+help = <<-EOS
+Ruby source files compiler. It is based on NodeMarshal class.
+from NodeDump gem. Source code is transformed to the Ruby node
+(syntax tree) serialized into ASCII string. Such transformation
+is based on Ruby internal syntax tree, irreversible and can
+be used for code obfuscation.
+
+(C) 2015 Alexey Voskov. License: 2-clause BSD.
+
+Usage:
+  noderbc inpfile outfile
+  
+  inpfile -- Name of input Ruby script (with extension)
+  outfile -- Name of output Ruby (with extension)
+EOS
+
+if ARGV.length != 2
+	puts help
+else
+	inpfile = ARGV[0]
+	outfile = ARGV[1]
+	raise 'inpfile and outfile cannot be equal' if inpfile == outfile
+	NodeMarshal.compile_rb_file(outfile, inpfile)
+end

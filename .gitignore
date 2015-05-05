@@ -1,0 +1,7 @@
+*.o
+*.exe
+*.so
+*.dll
+*.bin
+*.lib
+*.gem

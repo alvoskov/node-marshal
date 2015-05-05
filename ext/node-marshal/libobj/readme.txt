@@ -1,0 +1,1 @@
+Directory for the object files for static library assembling.
