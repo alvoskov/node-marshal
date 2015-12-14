@@ -58,11 +58,11 @@ EOS
 		File.open('lifegame_bin.rb', 'w') {|fp| fp << txt }
 		`ruby lifegame_bin.rb`
 		res_file = File.read('life.res')
-		`rm life.res`	
+		`rm life.res`
 		# Run the life game without compilation to the file
 		load('lifegame.rb')
 		res_load = run_game
 		Object.send(:remove_const, :LifeGame)
-		assert_equal(res_file, res_load)		
+		assert_equal(res_file, res_load)
 	end
 end

@@ -703,7 +703,8 @@ int count_num_of_nodes(NODE *node, NODE *parent, NODEInfo *info)
 		}
 		else if (ut[2] != NT_LONG && ut[2] != NT_NULL)
 		{
-			rb_raise(rb_eArgError, "Invalid child node 3: %d", ut[2]);
+			rb_raise(rb_eArgError, "Invalid child node 3 of node %s: TYPE %d, VALUE %"PRIxPTR,
+				ruby_node_name(nd_type(node)), ut[2], node->u3.value);
 		}
 
 		return num;
@@ -1172,8 +1173,8 @@ static VALUE get_hash_strfield(VALUE hash, const char *idtxt)
 static VALUE check_hash_magic(VALUE data)
 {
 	VALUE val, refval;
-	// MAGIC signature must be valid	
-	val = get_hash_strfield(data, "MAGIC");	
+	// MAGIC signature must be valid
+	val = get_hash_strfield(data, "MAGIC");
 	if (strcmp("NODEMARSHAL10", RSTRING_PTR(val)))
 		rb_raise(rb_eArgError, "Bad value of MAGIC signature");
 	// RUBY_PLATFORM signature must match the current platform
@@ -1221,7 +1222,7 @@ static VALUE m_nodedump_from_memory(VALUE self, VALUE dump)
 		rb_raise(rb_eArgError, "num_of_nodes not found");
 	}
 	else
-	{		
+	{
 		num_of_nodes = FIX2INT(val);
 	}
 	/* Check "magic" signature and platform identifiers */
@@ -1302,13 +1303,57 @@ static VALUE m_nodedump_symbols(VALUE self)
 }
 
 /*
+ * Replace one symbol by another
+ * (to be used for code obfuscation)
+ */
+static VALUE m_nodedump_change_symbol(VALUE self, VALUE old_sym, VALUE new_sym)
+{
+	VALUE val_nodehash = rb_iv_get(self, "@nodehash");
+	VALUE syms;
+	NODEInfo *nodeinfo;
+	VALUE old_syms, key;
+	int i, len;
+	// Check if node is position-independent
+	// (i.e. with initialized NODEInfo structure that contains
+	// relocations for symbols)
+	if (val_nodehash == Qnil)
+		rb_raise(rb_eArgError, "This node is not preparsed into Hash");
+	// Check data types of the input array
+	if (TYPE(old_sym) != T_STRING)
+	{
+		rb_raise(rb_eArgError, "old_sym argument must be a string");
+	}
+	if (TYPE(new_sym) != T_STRING)
+	{
+		rb_raise(rb_eArgError, "new_sym argument must be a string");
+	}
+	// Get the symbol table from the Hash
+	syms = rb_hash_aref(val_nodehash, ID2SYM(rb_intern("symbols")));
+	if (syms == Qnil)
+		rb_raise(rb_eArgError, "Preparsed hash has no :symbols field");
+	// Check if new_sym is present in the symbol table
+	key = rb_funcall(syms, rb_intern("find_index"), 1, new_sym);
+	if (key != Qnil)
+	{
+		rb_raise(rb_eArgError, "new_sym value must be absent in table of symbols");
+	}
+	// Change the symbol in the preparsed Hash
+	key = rb_funcall(syms, rb_intern("find_index"), 1, old_sym);
+	if (key == Qnil)
+		return Qnil;
+	RARRAY_PTR(syms)[FIX2INT(key)] = new_sym;
+	return self;
+}
+
+/*
  * Return array with the list of literals
  */
 static VALUE m_nodedump_literals(VALUE self)
 {
 	int i;
 	VALUE val_relocs, val_nodeinfo, lits;
-	// Variant 1: node loaded from file
+	// Variant 1: node loaded from file. It uses NODEObjAddresses struct
+	// with the results of Ruby NODE structure parsing.
 	val_relocs = rb_iv_get(self, "@obj_addresses");
 	if (val_relocs != Qnil)
 	{
@@ -1317,10 +1362,17 @@ static VALUE m_nodedump_literals(VALUE self)
 		Data_Get_Struct(val_relocs, NODEObjAddresses, relocs);
 		lits = rb_ary_new();
 		for (i = 0; i < relocs->lits_len; i++)
-			rb_ary_push(lits, rb_funcall(relocs->lits_adr[i], rb_intern("dup"), 0));
+		{
+			VALUE val = relocs->lits_adr[i];
+			int t = TYPE(val);
+			if (t != T_SYMBOL && t != T_FLOAT && t != T_FIXNUM)
+				val = rb_funcall(val, rb_intern("dup"), 0);
+			rb_ary_push(lits, val);
+		}
 		return lits;
 	}
-	// Variant 2: node saved to file (parsed from memory)
+	// Variant 2: node saved to file (parsed from memory). It uses
+	// NODEInfo struct that is initialized during node dump parsing.
 	val_nodeinfo = rb_iv_get(self, "@nodeinfo");
 	if (val_nodeinfo != Qnil)
 	{
@@ -1337,7 +1389,15 @@ static VALUE m_nodedump_literals(VALUE self)
 		}
 		return lits;
 	}
-	rb_raise(rb_eArgError, "Literals information not initialized. Run to_hash before reading.");	
+	rb_raise(rb_eArgError, "Literals information not initialized. Run to_hash before reading.");
+}
+
+/*
+ * Update the array with the list of literals
+ * (to be used for code obfuscation)
+ */
+static VALUE m_nodedump_change_literal(VALUE self, VALUE old_lit, VALUE new_lit)
+{
 }
 
 
@@ -1387,7 +1447,7 @@ static VALUE m_nodedump_from_string(VALUE self, VALUE str)
 {
 	VALUE line = INT2FIX(1), node;
 	const char *fname = "STRING";
-	Check_Type(str, T_STRING);	
+	Check_Type(str, T_STRING);
 	rb_secure(1);
 	/* Create empty information about the file */
 	rb_iv_set(self, "@nodename", rb_str_new2("<main>"));
@@ -1492,9 +1552,9 @@ static VALUE m_nodedump_dump_tree_short(VALUE self)
  * - <tt>MAGIC</tt> -- NODEMARSHAL10
  * - <tt>RUBY_PLATFORM</tt> -- saved <tt>RUBY_PLATFORM</tt> constant value
  * - <tt>RUBY_VERSION</tt>  -- saved <tt>RUBY_VERSION</tt> constant value
- * 
+ *
  * <i>Part 2: Program loadable elements.</i>
- * 
+ *
  * All loadable elements are arrays. Index of the array element means
  * its identifier that is used in the node tree.
  *
@@ -1507,6 +1567,10 @@ static VALUE m_nodedump_dump_tree_short(VALUE self)
  * <i>Part 3: Nodes information</i>
  * - <tt>nodes</tt> -- string that contains binary encoded information
  *   about the nodes
+ * - <tt>num_of_nodes</tt> -- number of nodes in the <tt>nodes</tt> field
+ * - <tt>nodename</tt> -- name of the node (usually "<main>")
+ * - <tt>filename</tt> -- name (without path) of .rb file used for the node generation
+ * - <tt>filepath</tt> -- name (with full path) of .rb file used for the node generation
  */
 static VALUE m_nodedump_to_hash(VALUE self)
 {
@@ -1515,18 +1579,29 @@ static VALUE m_nodedump_to_hash(VALUE self)
 	VALUE ans, num, val_info;
 	// DISABLE GARBAGE COLLECTOR (important for dumping)
 	rb_gc_disable();
-	// Allocate memory for the information about node
-	val_info = Data_Make_Struct(cNodeInfo, NODEInfo,
-		NODEInfo_mark, NODEInfo_free, info); // This data envelope cannot exist without NODE
-	NODEInfo_init(info);
-	rb_iv_set(self, "@nodeinfo", val_info);
-	// Convert node to NODEInfo structure
-	num = INT2FIX(count_num_of_nodes(node, node, info));
-	ans = NODEInfo_toHash(info);
-	rb_hash_aset(ans, ID2SYM(rb_intern("num_of_nodes")), num);
-	rb_hash_aset(ans, ID2SYM(rb_intern("nodename")), rb_iv_get(self, "@nodename"));
-	rb_hash_aset(ans, ID2SYM(rb_intern("filename")), rb_iv_get(self, "@filename"));
-	rb_hash_aset(ans, ID2SYM(rb_intern("filepath")), rb_iv_get(self, "@filepath"));
+	// Convert the node to the form with relocs (i.e. the information about node)
+	// if such form is not present
+	val_info = rb_iv_get(self, "@nodeinfo");
+	if (val_info == Qnil)
+	{
+		val_info = Data_Make_Struct(cNodeInfo, NODEInfo,
+			NODEInfo_mark, NODEInfo_free, info); // This data envelope cannot exist without NODE
+		NODEInfo_init(info);
+		rb_iv_set(self, "@nodeinfo", val_info);
+		num = INT2FIX(count_num_of_nodes(node, node, info));
+		rb_iv_set(self, "@nodeinfo_num_of_nodes", num);
+		// Convert node to NODEInfo structure
+		ans = NODEInfo_toHash(info);
+		rb_hash_aset(ans, ID2SYM(rb_intern("num_of_nodes")), num);
+		rb_hash_aset(ans, ID2SYM(rb_intern("nodename")), rb_iv_get(self, "@nodename"));
+		rb_hash_aset(ans, ID2SYM(rb_intern("filename")), rb_iv_get(self, "@filename"));
+		rb_hash_aset(ans, ID2SYM(rb_intern("filepath")), rb_iv_get(self, "@filepath"));
+		rb_iv_set(self, "@nodehash", ans);
+	}
+	else
+	{
+		ans = rb_iv_get(self, "@nodehash");
+	}
 	// ENABLE GARBAGE COLLECTOR (important for dumping)
 	rb_gc_enable();
 	return ans;
@@ -1775,7 +1850,7 @@ void Init_nodemarshal()
 	init_nodes_table(nodes_ctbl, NODES_CTBL_SIZE);
 	base85r_init_tables();
 	
-	cNodeMarshal = rb_define_class("NodeMarshal", rb_cObject);	
+	cNodeMarshal = rb_define_class("NodeMarshal", rb_cObject);
 	rb_define_singleton_method(cNodeMarshal, "base85r_encode", RUBY_METHOD_FUNC(m_base85r_encode), 1);
 	rb_define_singleton_method(cNodeMarshal, "base85r_decode", RUBY_METHOD_FUNC(m_base85r_decode), 1);
 
@@ -1789,7 +1864,9 @@ void Init_nodemarshal()
 	// Methods for working with the information about the node
 	// a) literals, symbols, generic information
 	rb_define_method(cNodeMarshal, "symbols", RUBY_METHOD_FUNC(m_nodedump_symbols), 0);
+	rb_define_method(cNodeMarshal, "change_symbol", RUBY_METHOD_FUNC(m_nodedump_change_symbol), 2);
 	rb_define_method(cNodeMarshal, "literals", RUBY_METHOD_FUNC(m_nodedump_literals), 0);
+	rb_define_method(cNodeMarshal, "change_literal", RUBY_METHOD_FUNC(m_nodedump_change_literal), 2);
 	rb_define_method(cNodeMarshal, "inspect", RUBY_METHOD_FUNC(m_nodedump_inspect), 0);
 	rb_define_method(cNodeMarshal, "node", RUBY_METHOD_FUNC(m_nodedump_node), 0);
 	// b) node and file names

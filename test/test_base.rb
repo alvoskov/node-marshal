@@ -148,6 +148,22 @@ EOS
 		end
 	end
 
+	# Test regular expressions (NODE_MATCH3 node issue)
+	def test_node_match3
+		program = <<-EOS
+a = "  d--abc"
+a =~ Regexp.new("abc")
+EOS
+		assert_node_compiler(program)
+	end
+
+	def test_node_block_pass
+		program = <<-EOS
+[1, 2, 3, "A"].map(&:class)
+EOS
+		assert_node_compiler(program)
+	end
+
 	# Part of the tests: compare result of direct usage of eval
 	# for the source code and its
 	def assert_node_compiler(program)

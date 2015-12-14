@@ -5,7 +5,9 @@ Gem::Specification.new do |s|
 		Dir.glob("README.rdoc") + 
 		Dir.glob("lib/*.rb") + 
 		Dir.glob("lib/node-marshal/*.rb") + 
-		Dir.glob("test/*.rb") +
+		Dir.glob("test/test_*.rb") +
+		Dir.glob("test/lifegame.rb") +
+		Dir.glob("test/tinytet.rb") +
 		Dir.glob("ext/node-marshal/extconf.rb") +
 		Dir.glob("ext/node-marshal/COPYING") +
 		Dir.glob("ext/node-marshal/libobj/readme.txt") + 
@@ -24,7 +26,7 @@ irreversible and can be used for source code protection; the similar principle i
 software.
 EOS
 	s.author = "Alexey Voskov"
-	s.version = "0.1.1"
+	s.version = "0.1.2"
 	s.license = "2-clause BSD"
 	s.email = "alvoskov@gmail.com"
 	s.required_ruby_version = ">= 1.9.3"
