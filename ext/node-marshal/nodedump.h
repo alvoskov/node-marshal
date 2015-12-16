@@ -46,22 +46,13 @@ void check_nodes_child_info(int pos);
 void init_nodes_table(int *nodes_ctbl, int num_of_entries);
 
 /* Parts of node.h from Ruby source code */
-#if (RUBY_API_VERSION_MAJOR == 2) && (RUBY_API_VERSION_MINOR == 2)
+#if (RUBY_API_VERSION_MAJOR == 2) && (RUBY_API_VERSION_MINOR == 3)
+#include "node230.h"
+#elif (RUBY_API_VERSION_MAJOR == 2) && (RUBY_API_VERSION_MINOR == 2)
 #include "node220.h"
 #elif (RUBY_API_VERSION_MAJOR == 1) && (RUBY_API_VERSION_MINOR == 9)
 #include "node193.h"
 #else
 #include "node220.h"
 #error Unsupported version of Ruby
-#endif
-
-/* Some Ruby internals */
-#if defined(__cplusplus)
-	extern "C" {
-#endif
-extern char *ruby_node_name(int type);
-extern VALUE rb_iseq_new_top(NODE *node, VALUE name, VALUE path, VALUE absolute_path, VALUE parent);
-extern VALUE rb_realpath_internal(VALUE basedir, VALUE path, int strict);
-#if defined(__cplusplus)
-	}
 #endif

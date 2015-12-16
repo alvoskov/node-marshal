@@ -1309,10 +1309,7 @@ static VALUE m_nodedump_symbols(VALUE self)
 static VALUE m_nodedump_change_symbol(VALUE self, VALUE old_sym, VALUE new_sym)
 {
 	VALUE val_nodehash = rb_iv_get(self, "@nodehash");
-	VALUE syms;
-	NODEInfo *nodeinfo;
-	VALUE old_syms, key;
-	int i, len;
+	VALUE syms, key;
 	// Check if node is position-independent
 	// (i.e. with initialized NODEInfo structure that contains
 	// relocations for symbols)
@@ -1398,8 +1395,9 @@ static VALUE m_nodedump_literals(VALUE self)
  */
 static VALUE m_nodedump_change_literal(VALUE self, VALUE old_lit, VALUE new_lit)
 {
+    /* TO BE IMPLEMENTED */
+    return self;
 }
-
 
 
 /*
@@ -1414,7 +1412,13 @@ static VALUE m_nodedump_compile(VALUE self)
 	VALUE nodename = rb_iv_get(self, "@nodename");
 	VALUE filename = rb_iv_get(self, "@filename");
 	VALUE filepath = rb_iv_get(self, "@filepath");
+#ifndef WITH_RB_ISEQW_NEW
+	/* For Pre-2.3 */
 	return rb_iseq_new_top(node, nodename, filename, filepath, Qfalse);
+#else
+	/* For Ruby 2.3 */
+	return rb_iseqw_new(rb_iseq_new_top(node, nodename, filename, filepath, Qfalse));
+#endif
 }
 
 /*

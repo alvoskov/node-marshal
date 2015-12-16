@@ -12,6 +12,8 @@ extern "C" {
 #endif
 #endif
 
+
+
 enum node_type {
     NODE_SCOPE,
 #define NODE_SCOPE       NODE_SCOPE
@@ -284,6 +286,12 @@ typedef struct RNode {
 
 #define NEW_NODE(t,a0,a1,a2) rb_node_newnode((t),(VALUE)(a0),(VALUE)(a1),(VALUE)(a2))
 RUBY_SYMBOL_EXPORT_BEGIN
+
+/* ===== Some version-specific Ruby internals ===== */
+extern char *ruby_node_name(int type);
+extern VALUE rb_iseq_new_top(NODE *node, VALUE name, VALUE path, VALUE absolute_path, VALUE parent);
+extern VALUE rb_realpath_internal(VALUE basedir, VALUE path, int strict);
+/* ================================================ */
 
 VALUE rb_parser_dump_tree(NODE *node, int comment);
 

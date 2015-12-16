@@ -125,7 +125,6 @@ a, b = XYPoint.new(0.0, 0.0), XYPoint.new(3.0, 4.0)
 c, d = PolarPoint.new(1.0, 0.0), PolarPoint.new(2.0, 90.0)
 [a.distance(b), c.distance(d)]
 EOS
-
 		assert_node_compiler(program)
 	end
 

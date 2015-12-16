@@ -1,5 +1,5 @@
 /*
- * Simpilfied node.h file from Ruby 1.9.3 source code
+ * Simpilfied node.h file from Ruby 2.3.0 source code
  * Copyright (C) 1993-2007 Yukihiro Matsumoto
  */
 
@@ -83,12 +83,16 @@ enum node_type {
 #define NODE_OP_ASGN_AND NODE_OP_ASGN_AND
     NODE_OP_ASGN_OR,
 #define NODE_OP_ASGN_OR  NODE_OP_ASGN_OR
+    NODE_OP_CDECL,
+#define NODE_OP_CDECL    NODE_OP_CDECL
     NODE_CALL,
 #define NODE_CALL        NODE_CALL
     NODE_FCALL,
 #define NODE_FCALL       NODE_FCALL
     NODE_VCALL,
 #define NODE_VCALL       NODE_VCALL
+    NODE_QCALL,
+#define NODE_QCALL       NODE_QCALL
     NODE_SUPER,
 #define NODE_SUPER       NODE_SUPER
     NODE_ZSUPER,
@@ -149,6 +153,8 @@ enum node_type {
 #define NODE_ARGS_AUX    NODE_ARGS_AUX
     NODE_OPT_ARG,
 #define NODE_OPT_ARG     NODE_OPT_ARG
+    NODE_KW_ARG,
+#define NODE_KW_ARG	 NODE_KW_ARG
     NODE_POSTARG,
 #define NODE_POSTARG     NODE_POSTARG
     NODE_ARGSCAT,
@@ -209,10 +215,6 @@ enum node_type {
 #define NODE_ALLOCA      NODE_ALLOCA
     NODE_BMETHOD,
 #define NODE_BMETHOD     NODE_BMETHOD
-    NODE_MEMO,
-#define NODE_MEMO        NODE_MEMO
-    NODE_IFUNC,
-#define NODE_IFUNC       NODE_IFUNC
     NODE_DSYM,
 #define NODE_DSYM        NODE_DSYM
     NODE_ATTRASGN,
@@ -221,8 +223,6 @@ enum node_type {
 #define NODE_PRELUDE     NODE_PRELUDE
     NODE_LAMBDA,
 #define NODE_LAMBDA      NODE_LAMBDA
-    NODE_OPTBLOCK,
-#define NODE_OPTBLOCK    NODE_OPTBLOCK
     NODE_LAST
 #define NODE_LAST        NODE_LAST
 };
@@ -248,6 +248,7 @@ typedef struct RNode {
 	ID id;
 	long state;
 	struct rb_global_entry *entry;
+	struct rb_args_info *args;
 	long cnt;
 	VALUE value;
     } u3;
@@ -255,9 +256,14 @@ typedef struct RNode {
 
 #define RNODE(obj)  (R_CAST(RNode)(obj))
 
-/* 0..4:T_TYPES, 5:FL_MARK, 6:reserved, 7:NODE_FL_NEWLINE */
-#define NODE_FL_NEWLINE (((VALUE)1)<<7)
-#define NODE_FL_CREF_PUSHED_BY_EVAL NODE_FL_NEWLINE
+/* FL     : 0..4: T_TYPES, 5: KEEP_WB, 6: PROMOTED, 7: FINALIZE, 8: TAINT, 9: UNTRUSTERD, 10: EXIVAR, 11: FREEZE */
+/* NODE_FL: 0..4: T_TYPES, 5: KEEP_WB, 6: PROMOTED, 7: NODE_FL_NEWLINE|NODE_FL_CREF_PUSHED_BY_EVAL,
+ *          8..14: nd_type,
+ *          15..: nd_line or
+ *          15: NODE_FL_CREF_PUSHED_BY_EVAL
+ *          16: NODE_FL_CREF_OMOD_SHARED
+ */
+#define NODE_FL_NEWLINE              (((VALUE)1)<<7)
 
 #define NODE_TYPESHIFT 8
 #define NODE_TYPEMASK  (((VALUE)0x7f)<<NODE_TYPESHIFT)
@@ -270,23 +276,41 @@ typedef struct RNode {
 #define NODE_LMASK  (((SIGNED_VALUE)1<<(sizeof(VALUE)*CHAR_BIT-NODE_LSHIFT))-1)
 #define nd_line(n) (int)(RNODE(n)->flags>>NODE_LSHIFT)
 #define nd_set_line(n,l) \
-    RNODE(n)->flags=((RNODE(n)->flags&~(-1<<NODE_LSHIFT))|(((l)&NODE_LMASK)<<NODE_LSHIFT))
+    RNODE(n)->flags=((RNODE(n)->flags&~((VALUE)(-1)<<NODE_LSHIFT))|((VALUE)((l)&NODE_LMASK)<<NODE_LSHIFT))
 
 #define NEW_NODE(t,a0,a1,a2) rb_node_newnode((t),(VALUE)(a0),(VALUE)(a1),(VALUE)(a2))
 
 
-#if defined __GNUC__ && __GNUC__ >= 4
-#pragma GCC visibility push(default)
-#endif
+RUBY_SYMBOL_EXPORT_BEGIN
 
 /* ===== Some version-specific Ruby internals ===== */
+struct rb_global_entry {
+    struct rb_global_variable *var;
+    ID id;
+};
+struct rb_global_entry *rb_global_entry(ID);
+VALUE rb_iseqw_new(const void *iseq);
 extern char *ruby_node_name(int type);
-extern VALUE rb_iseq_new_top(NODE *node, VALUE name, VALUE path, VALUE absolute_path, VALUE parent);
+extern void *rb_iseq_new_top(NODE *node, VALUE name, VALUE path, VALUE absolute_path, void *parent);
 extern VALUE rb_realpath_internal(VALUE basedir, VALUE path, int strict);
+#define WITH_RB_ISEQW_NEW 1
 /* ================================================ */
 
 
+VALUE rb_parser_new(void);
+VALUE rb_parser_end_seen_p(VALUE);
+VALUE rb_parser_encoding(VALUE);
+VALUE rb_parser_get_yydebug(VALUE);
+VALUE rb_parser_set_yydebug(VALUE, VALUE);
 VALUE rb_parser_dump_tree(NODE *node, int comment);
+NODE *rb_parser_append_print(VALUE, NODE *);
+NODE *rb_parser_while_loop(VALUE, NODE *, int, int);
+
+NODE *rb_parser_compile_cstr(VALUE, const char*, const char*, int, int);
+NODE *rb_parser_compile_string(VALUE, const char*, VALUE, int);
+NODE *rb_parser_compile_file(VALUE, const char*, VALUE, int);
+NODE *rb_parser_compile_string_path(VALUE vparser, VALUE fname, VALUE src, int line);
+NODE *rb_parser_compile_file_path(VALUE vparser, VALUE fname, VALUE input, int line);
 
 NODE *rb_compile_cstr(const char*, const char*, int, int);
 NODE *rb_compile_string(const char*, VALUE, int);
@@ -294,21 +318,37 @@ NODE *rb_compile_file(const char*, VALUE, int);
 
 NODE *rb_node_newnode(enum node_type,VALUE,VALUE,VALUE);
 NODE *rb_node_newnode_longlife(enum node_type,VALUE,VALUE,VALUE);
+void rb_gc_free_node(VALUE obj);
+size_t rb_node_memsize(VALUE obj);
+VALUE rb_gc_mark_node(NODE *obj);
 
-struct rb_global_entry {
-    struct rb_global_variable *var;
-    ID id;
-};
-
-struct rb_global_entry *rb_global_entry(ID);
-VALUE rb_gvar_get(struct rb_global_entry *);
-VALUE rb_gvar_set(struct rb_global_entry *, VALUE);
-VALUE rb_gvar_defined(struct rb_global_entry *);
 const struct kwtable *rb_reserved_word(const char *, unsigned int);
 
-#if defined __GNUC__ && __GNUC__ >= 4
-#pragma GCC visibility pop
-#endif
+struct rb_args_info {
+    NODE *pre_init;
+    NODE *post_init;
+
+    int pre_args_num;  /* count of mandatory pre-arguments */
+    int post_args_num; /* count of mandatory post-arguments */
+
+    ID first_post_arg;
+
+    ID rest_arg;
+    ID block_arg;
+
+    NODE *kw_args;
+    NODE *kw_rest_arg;
+
+    NODE *opt_args;
+};
+
+struct parser_params;
+void *rb_parser_malloc(struct parser_params *, size_t);
+void *rb_parser_realloc(struct parser_params *, void *, size_t);
+void *rb_parser_calloc(struct parser_params *, size_t, size_t);
+void rb_parser_free(struct parser_params *, void *);
+
+RUBY_SYMBOL_EXPORT_END
 
 #if defined(__cplusplus)
 #if 0

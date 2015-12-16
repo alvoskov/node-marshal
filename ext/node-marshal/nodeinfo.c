@@ -3,6 +3,7 @@
  * Supported Ruby versions:
  * - Ruby 1.9.3
  * - Ruby 2.2.1
+ * - Ruby 2.3.0
  *
  * Fragments from Ruby source code are used here
  * (mainly from node.c, gc.c)
@@ -70,6 +71,9 @@ static int nodes_child_info[][4] =
 	{NODE_CALL, NT_NODE, NT_ID, NT_NODE},
 	{NODE_FCALL, NT_NULL, NT_ID, NT_NODE},
 	{NODE_VCALL, NT_NULL, NT_ID, NT_NULL},
+#ifdef NODE_QCALL
+	{NODE_QCALL, NT_NODE, NT_ID, NT_NODE}, /* &. operator from Ruby 2.3 */
+#endif	
 
 	{NODE_SUPER, NT_NULL, NT_NULL, NT_NODE},
 	{NODE_ZSUPER, NT_NULL, NT_NULL, NT_NULL},
@@ -299,7 +303,7 @@ void check_nodes_child_info(int pos)
 	default:
 		return;
 	}
-#elif RUBY_API_VERSION_MAJOR == 2
+#elif (RUBY_API_VERSION_MAJOR == 2) && (RUBY_API_VERSION_MINOR == 2)
 	/* RUBY 2.2.1 VARIANT */    
 	switch (type)
 	{
@@ -425,6 +429,124 @@ void check_nodes_child_info(int pos)
 	default:		/* unlisted NODE */
 		//printf("Warning: unknown node %s in the initial table\n",
 		//	ruby_node_name(nodes_child_info[pos][0]));
+		return;
+	}
+#elif (RUBY_API_VERSION_MAJOR == 2) && (RUBY_API_VERSION_MINOR == 3)
+	switch (type)
+	{
+	case NODE_IF:		/* 1,2,3 */
+	case NODE_FOR:
+	case NODE_ITER:
+	case NODE_WHEN:
+	case NODE_MASGN:
+	case NODE_RESCUE:
+	case NODE_RESBODY:
+	case NODE_CLASS:
+	case NODE_BLOCK_PASS:
+		isval[1] = 1;
+	/* fall through */
+	case NODE_BLOCK:	/* 1,3 */
+	case NODE_ARRAY:
+	case NODE_DSTR:
+	case NODE_DXSTR:
+	case NODE_DREGX:
+	case NODE_DREGX_ONCE:
+	case NODE_ENSURE:
+	case NODE_CALL:
+	case NODE_DEFS:
+	case NODE_OP_ASGN1:
+		isval[0] = 1;
+	/* fall through */
+	case NODE_SUPER:	/* 3 */
+	case NODE_FCALL:
+	case NODE_DEFN:
+	case NODE_ARGS_AUX:
+		isval[2] = 1;
+		break;
+
+	case NODE_WHILE:	/* 1,2 */
+	case NODE_UNTIL:
+	case NODE_AND:
+	case NODE_OR:
+	case NODE_CASE:
+	case NODE_SCLASS:
+	case NODE_DOT2:
+	case NODE_DOT3:
+	case NODE_FLIP2:
+	case NODE_FLIP3:
+	case NODE_MATCH2:
+	case NODE_MATCH3:
+	case NODE_OP_ASGN_OR:
+	case NODE_OP_ASGN_AND:
+	case NODE_MODULE:
+	case NODE_ALIAS:
+	//case NODE_VALIAS:
+	case NODE_ARGSCAT:
+		isval[0] = 1;
+	/* fall through */
+	case NODE_GASGN:	/* 2 */
+	case NODE_LASGN:
+	case NODE_DASGN:
+	case NODE_DASGN_CURR:
+	case NODE_IASGN:
+	case NODE_IASGN2:
+	case NODE_CVASGN:
+	//case NODE_COLON3:
+	case NODE_OPT_N:
+	case NODE_EVSTR:
+	case NODE_UNDEF:
+	case NODE_POSTEXE:
+		isval[1] = 1;
+		break;
+
+	case NODE_HASH:	/* 1 */
+	case NODE_LIT:
+	case NODE_STR:
+	case NODE_XSTR:
+	case NODE_DEFINED:
+	case NODE_MATCH:
+	case NODE_RETURN:
+	case NODE_BREAK:
+	case NODE_NEXT:
+	case NODE_YIELD:
+	case NODE_COLON2:
+	case NODE_SPLAT:
+	case NODE_TO_ARY:
+		isval[0] = 1;
+		break;
+
+	case NODE_SCOPE:	/* 2,3 */
+	case NODE_CDECL:
+	case NODE_OPT_ARG:
+		isval[1] = 1;
+		isval[2] = 1;
+		break;
+
+	case NODE_ARGS:	/* custom */
+		isval[1] = 1;
+		break;
+
+	case NODE_ZARRAY:	/* - */
+	case NODE_ZSUPER:
+	case NODE_VCALL:
+	case NODE_GVAR:
+	case NODE_LVAR:
+	case NODE_DVAR:
+	case NODE_IVAR:
+	case NODE_CVAR:
+	case NODE_NTH_REF:
+	case NODE_BACK_REF:
+	case NODE_REDO:
+	case NODE_RETRY:
+	case NODE_SELF:
+	case NODE_NIL:
+	case NODE_TRUE:
+	case NODE_FALSE:
+	case NODE_ERRINFO:
+	case NODE_BLOCK_ARG:
+		break;
+	/* NODE_ALLOCA EXCLUDED */
+	default:		/* unlisted NODE */
 		return;
 	}
 #endif
