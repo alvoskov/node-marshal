@@ -4,7 +4,8 @@ This gem is designed for transformation of Ruby source code (eiher in the form o
 Ruby nodes (syntax trees) used by Ruby MRI internals. Obtained nodes can be serialized to the platform-dependent
 binary or ASCII strings and restored and launched from serialized format. Such kind of transformation is
 irreversible and can be used for source code protection; the similar principle is used by RubyEncoder commercial
-software.
+software. It also contains some subroutines that can be useful for code obfuscation by renaming symbols
+inside the program.
 
 The key features of node-marshal gem:
 - Irreversible conversion of a source code to the Ruby node (abstract syntax tree)
@@ -12,6 +13,7 @@ The key features of node-marshal gem:
 - Active usage of Ruby internals (mainly AST) and Ruby standard library (Marshal and Zlib)
 - Set of tests for easy addition of new Ruby versions
 - Result of compilation depends on Ruby version and used platform (x86, x64 etc.)
+- Subroutines for obfuscation
 - 2-clause BSD license suitable for creation of custom source code protection system
 
 Changelog:
@@ -19,5 +21,7 @@ Changelog:
       - Ruby 2.3.x preliminary support (including &. safe navigation operator)
       - Bugfix: NODE_MATCH3 (a =~ /abc/) issue (reported by Gregory Siehień)
       - Bugfix: NODE_BLOCK_PASS (short map syntax) issue (reported by Gregory Siehień)
+      - Bugfix: failure in the case of syntax errors in the input data (now ArgumentError
+        exception will be generated instead of it)
       - Ability of symbols renaming (for hiding variables and constants name during code obfuscation)
 - 04.MAY.2015 - 0.1.1 - first public version

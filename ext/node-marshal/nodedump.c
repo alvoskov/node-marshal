@@ -1469,6 +1469,7 @@ static VALUE m_nodedump_from_source(VALUE self, VALUE file)
 	VALUE line = INT2FIX(1), f, node, filepath;
 	const char *fname;
 
+	rb_gc_disable();
 	rb_secure(1);
 	FilePathValue(file);
 	fname = StringValueCStr(file);
@@ -1480,7 +1481,12 @@ static VALUE m_nodedump_from_source(VALUE self, VALUE file)
 	/* Create node from the source */
 	f = rb_file_open_str(file, "r");
 	node = (VALUE) rb_compile_file(fname, f, NUM2INT(line));
+	rb_gc_enable();
 	rb_iv_set(self, "@node", node);
+	if ((void *) node == NULL)
+	{
+		rb_raise(rb_eArgError, "Error during string parsing");
+	}
 	return self;
 }
 
@@ -1511,6 +1517,10 @@ static VALUE m_nodedump_from_string(VALUE self, VALUE str)
 	rb_iv_set(self, "@node", node);
 	rb_gc_enable();
 	rb_gc_start();
+	if ((void *) node == NULL)
+	{
+		rb_raise(rb_eArgError, "Error during string parsing");
+	}
 	return self;
 }
 

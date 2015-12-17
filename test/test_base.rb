@@ -163,6 +163,29 @@ EOS
 		assert_node_compiler(program)
 	end
 
+	# Check the reaction on the parsing errors during the node creation
+	# In the case of syntax error ArgumentError exception should be generated
+	def test_syntax_error
+		program = "a = 1; a++" # Contains syntax error
+		# a) from memory (string)
+		test_passed = false
+		begin
+			node = NodeMarshal.new(:srcmemory, program)
+		rescue ArgumentError
+			test_passed = true
+		end
+		assert_equal(test_passed, true);
+		# b) from file
+		File.open("_tmp.rb", "w") {|fp| fp << program }
+		test_passed = false
+		begin
+			node = NodeMarshal.new(:srcfile, "_tmp.rb")
+		rescue ArgumentError
+			test_passed = true
+		end
+		assert_equal(test_passed, true);	
+	end
+
 	# Part of the tests: compare result of direct usage of eval
 	# for the source code and its
 	def assert_node_compiler(program)
