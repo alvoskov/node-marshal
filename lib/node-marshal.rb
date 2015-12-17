@@ -30,7 +30,7 @@ class NodeMarshal
 		end
 		# Compression
 		if compress
-			if !defined(Zlib)
+			if !defined?(Zlib)
 				raise "Compression is not supported: Zlib is absent"
 			end
 			zlib_include = "require 'zlib'"
