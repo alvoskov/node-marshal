@@ -1,6 +1,7 @@
 /*
  * Simpilfied node.h file from Ruby 2.3.0 source code
  * Copyright (C) 1993-2007 Yukihiro Matsumoto
+ * Copyright (C) 2015 Alexey Voskov
  */
 
 #ifndef RUBY_NODE_H
@@ -288,12 +289,12 @@ struct rb_global_entry {
     struct rb_global_variable *var;
     ID id;
 };
-struct rb_global_entry *rb_global_entry(ID);
 VALUE rb_iseqw_new(const void *iseq);
 extern char *ruby_node_name(int type);
 extern void *rb_iseq_new_top(NODE *node, VALUE name, VALUE path, VALUE absolute_path, void *parent);
 extern VALUE rb_realpath_internal(VALUE basedir, VALUE path, int strict);
 #define WITH_RB_ISEQW_NEW 1
+#define WITH_CUSTOM_RB_GLOBAL_ENTRY 1
 /* ================================================ */
 
 

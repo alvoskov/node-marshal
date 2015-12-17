@@ -18,9 +18,42 @@
 static VALUE cNodeObjAddresses, cNodeInfo;
 
 /*
- * Part 1. "Citations" from Ruby 2.2.1 internal include files
+ * Part 1. .H files: nodedump functions + parts of Ruby internals
  */
 #include "nodedump.h"
+
+#ifdef WITH_CUSTOM_RB_GLOBAL_ENTRY
+/* Custom (and slow) implementation of rb_global_entry internal API for Ruby 2.3
+   (original rb_global_entry API was opened before Ruby 2.3)
+   It uses a hack with the node creation. The main idea of the hack is 
+   to create a node from the expression containing only a name of the global variable
+   and extract global entry address from NODE_GVAR u3 "leaf" */
+static struct rb_global_entry *rb_global_entry(ID id)
+{
+	NODE *node, *gvar_node;
+	struct rb_global_entry *gentry;
+	/* a) Step 1: create node from the expression consisting only from
+	   our global variable */
+	node = rb_compile_string("<compiled>", rb_id2str(id), NUM2INT(1));
+	if (nd_type(node) != NODE_SCOPE)
+	{
+		return NULL;
+	}
+	/* b) Trace the node to the NODE_GVAR */
+	gvar_node = node->u2.node;
+	if (nd_type(gvar_node) == NODE_PRELUDE) /* Present only in 2.3 */
+	{
+		gvar_node = gvar_node->u2.node;
+	}
+	if (nd_type(gvar_node) != NODE_GVAR) /* Error: no GVAR found */
+	{
+		return NULL;
+	}
+	/* c) Get the global entry address and return its address */
+	gentry = gvar_node->u3.entry;
+	return gentry;
+}
+#endif
 
 
 /*
@@ -704,7 +737,7 @@ int count_num_of_nodes(NODE *node, NODE *parent, NODEInfo *info)
 		else if (ut[2] != NT_LONG && ut[2] != NT_NULL)
 		{
 			rb_raise(rb_eArgError, "Invalid child node 3 of node %s: TYPE %d, VALUE %"PRIxPTR,
-				ruby_node_name(nd_type(node)), ut[2], node->u3.value);
+				ruby_node_name(nd_type(node)), ut[2], (uintptr_t) (node->u3.value));
 		}
 
 		return num;
@@ -861,6 +894,13 @@ void print_node(VALUE str, NODE *node, int tab)
 		{
 			PRINT_NODE_TAB; rbstr_printf(str, "  ");
 			rbstr_printf(str, ">| IDTABLE\n");
+		}
+		else if (ut[i] == NT_ENTRY)
+		{
+			struct rb_global_entry *gentry;
+			gentry = (struct rb_global_entry *) uref[i];
+			PRINT_NODE_TAB; rbstr_printf(str, "  ");
+			rbstr_printf(str, ">| [GLOBAL ENTRY PTR=0x%"PRIxPTR" ID=%X]\n", (uintptr_t) gentry->var, gentry->id);
 		}
 		else
 		{
@@ -1644,7 +1684,7 @@ static VALUE m_nodedump_inspect(VALUE self)
 	sprintf(str,
 		"----- NodeMarshal:0x%"PRIxPTR"\n"
 		"    num_of_nodes: %d\n    nodename: %s\n    filepath: %s\n    filename: %s\n",
-		self,
+		(uintptr_t) (self),
 		(num_of_nodes == Qnil) ? -1 : FIX2INT(num_of_nodes),
 		(nodename == Qnil) ? "nil" : RSTRING_PTR(nodename),
 		(filepath == Qnil) ? "nil" : RSTRING_PTR(filepath),
@@ -1846,14 +1886,15 @@ static VALUE m_nodedump_node(VALUE self)
  * - Irreversible transformation of Ruby source code to the syntax tree
  * - Representation of syntax tree in binary form dependent from the platform and Ruby version
  * - Simple options for node inspection
- * - Ruby 1.9.3 and 2.2.1 support
+ * - Ruby 1.9.3, 2.2.x and 2.3.x support
+ * - Subroutines for custom code obfuscation
  */
 void Init_nodemarshal()
 {
 	static VALUE cNodeMarshal;
 	init_nodes_table(nodes_ctbl, NODES_CTBL_SIZE);
 	base85r_init_tables();
-	
+
 	cNodeMarshal = rb_define_class("NodeMarshal", rb_cObject);
 	rb_define_singleton_method(cNodeMarshal, "base85r_encode", RUBY_METHOD_FUNC(m_base85r_encode), 1);
 	rb_define_singleton_method(cNodeMarshal, "base85r_decode", RUBY_METHOD_FUNC(m_base85r_decode), 1);

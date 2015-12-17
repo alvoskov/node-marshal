@@ -1,6 +1,7 @@
 /*
  * Simpilfied node.h file from Ruby 1.9.3 source code
  * Copyright (C) 1993-2007 Yukihiro Matsumoto
+ * Copyright (C) 2015 Alexey Voskov
  */
 
 #ifndef RUBY_NODE_H
