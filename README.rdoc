@@ -17,7 +17,7 @@ The key features of node-marshal gem:
 - 2-clause BSD license suitable for creation of custom source code protection system
 
 Changelog:
-- ??.DEC.2015 - 0.1.2
+- 24.DEC.2015 - 0.1.2
       - Ruby 2.3.x preliminary support (including &. safe navigation operator)
       - Bugfix: NODE_MATCH3 (a =~ /abc/) issue (reported by Gregory Siehień)
       - Bugfix: NODE_BLOCK_PASS (short map syntax) issue (reported by Gregory Siehień)
