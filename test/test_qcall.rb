@@ -30,14 +30,17 @@ end
 a = Account.new("Owner", "Moscow");
 puts "'#{a&.owner_name}'"
 puts "'#{a&.owner_info&.address}'"
-a = Account.new("Owner", nil);
-puts "'#{a&.owner_name}'"
-puts "'#{a&.owner_info&.address}'"
+b = Account.new("Owner", nil);
+puts "'#{b&.owner_name}'"
+puts "'#{b&.owner_info&.address}'"
+[a&.owner_name, a&.owner_info&.address, b&.owner_name, b&.owner_info&.address]
 }
 
 		node = NodeMarshal.new(:srcmemory, qcall_program)
 		bindump =  node.to_bin
 		node = NodeMarshal.new(:binmemory, bindump)
-		node.compile.eval
+		res_node = node.compile.eval
+		res_text = eval(qcall_program)
+		assert_equal(res_text, res_node)
 	end
 end
