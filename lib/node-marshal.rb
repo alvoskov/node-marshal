@@ -6,6 +6,22 @@ rescue LoadError
 	# compression will be provided in 
 end
 
+# Implementation of Array::to_h method for Ruby 1.9 (and probably 2.0)
+# Don't use for Ruby 2.2.x and Ruby 2.3.x
+if !defined?([].to_h)
+	class Array
+		def to_h
+			h = {}
+			a = self
+			a.each do |x|
+				raise "wrong array length" if x.length != 2
+				h[x[0]] = x[1];
+			end
+			return h
+		end
+	end
+end
+
 class NodeMarshal
 	# call-seq:
 	#   obj.to_compiled_rb(outfile, opts)

@@ -1,5 +1,5 @@
 /*
- * Simpilfied node.h file from Ruby 2.2.1 source code
+ * Simpilfied and modified node.h file from Ruby 2.2.1 source code
  * Copyright (C) 1993-2007 Yukihiro Matsumoto
  * Copyright (C) 2015 Alexey Voskov
  */

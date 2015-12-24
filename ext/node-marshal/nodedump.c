@@ -1432,6 +1432,7 @@ static VALUE m_nodedump_literals(VALUE self)
 /*
  * Update the array with the list of literals
  * (to be used for code obfuscation)
+ * Warning! This function is a stub!
  */
 static VALUE m_nodedump_change_literal(VALUE self, VALUE old_lit, VALUE new_lit)
 {
