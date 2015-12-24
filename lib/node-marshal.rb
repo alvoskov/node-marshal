@@ -33,7 +33,7 @@ class NodeMarshal
 	#   with the command for nodemarshal.so inclusion (default is 
 	#   require_relative '../ext/node-marshal/nodemarshal.so')
 	def to_compiled_rb(outfile, *args)
-		compress = false
+		compress = true
 		so_path = "require_relative '../ext/node-marshal/nodemarshal.so'"
 		if args.length > 0
 			opts = args[0]
