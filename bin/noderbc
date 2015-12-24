@@ -11,17 +11,55 @@ be used for code obfuscation.
 (C) 2015 Alexey Voskov. License: 2-clause BSD.
 
 Usage:
-  noderbc inpfile outfile
+  noderbc inpfile outfile [options]
+
+  Required arguments:  
+    inpfile -- Name of input Ruby script (with extension)
+    outfile -- Name of output Ruby (with extension)
+
+  Options:
+    --compress=none -- No ZLib compression of the source
+    --compress=zlib -- Use ZLib compression of the source (default)
+    --so_path="str" -- String for inclusion of the node-marshal loader
+      Its default value is:
+        require_relative '../ext/node-marshal/nodemarshal.so'
   
-  inpfile -- Name of input Ruby script (with extension)
-  outfile -- Name of output Ruby (with extension)
 EOS
 
-if ARGV.length != 2
+if ARGV.length < 2
+	# No required number of input arguments: show short help
 	puts help
 else
+	# Optional arguments processing
+	opts = {}
+	if ARGV.length > 2
+		ARGV[2..-1].each do |arg|
+			case arg
+			when '--compress=none'
+				opts[:compress] = false
+			when '--compress=zlib'
+				opts[:compress] = true
+			when /^--so_path=.+$/
+				str = arg[10..-1]
+				opts[:so_path] = str
+			else
+				puts "Unknown argument #{arg}"
+				exit
+			end
+		end
+	end
+	# Show given options
+	puts "Used options:"
+	if opts.size == 0
+		puts "  default"
+	else
+		puts "  compress: #{opts[:compress]}" if opts.has_key?(:compress)
+		puts "  so_path:  #{opts[:so_path]}" if opts.has_key?(:so_path)
+	end
+	# Required arguments processing
 	inpfile = ARGV[0]
 	outfile = ARGV[1]
 	raise 'inpfile and outfile cannot be equal' if inpfile == outfile
-	NodeMarshal.compile_rb_file(outfile, inpfile)
+	NodeMarshal.compile_rb_file(outfile, inpfile, opts)
+
 end
