@@ -2,8 +2,8 @@
  * This file contains implementation of classes for Ruby nodes
  * marshalization (i.e. loading and saving them from disk)
  * 
- * (C) 2015 Alexey Voskov
- * License: 2-clause BSD
+ * (C) 2015-2016 Alexey Voskov
+ * License: BSD-2-Clause
  */
 #define __STDC_FORMAT_MACROS
 #include <stdio.h>
@@ -885,9 +885,10 @@ static void print_node(VALUE str, NODE *node, int tab, int show_offsets)
 		}
 		else if (ut[i] == NT_ID)
 		{
-			PRINT_NODE_TAB; rbstr_printf(str, "  ");
 			const char *str_null = "<NULL>", *str_intern = "<NONAME>";
 			const char *str_sym;
+			PRINT_NODE_TAB; rbstr_printf(str, "  ");
+
 			if (uref[i] == 0)
 				str_sym = str_null;
 			else
@@ -1096,16 +1097,16 @@ void resolve_args_ords(VALUE data, NODEObjAddresses *relocs)
 			rb_raise(rb_eArgError, "args entry %d is corrupted", i);
 		}
 		// Load unresolved values
-		ainfo->pre_init = (NODE *) FIX2LONG(aiptr[0]); // Node ordinal
-		ainfo->post_init = (NODE *) FIX2LONG(aiptr[1]); // Node ordinal
+		ainfo->pre_init = (NODE *) (uintptr_t) FIX2LONG(aiptr[0]); // Node ordinal
+		ainfo->post_init = (NODE *) (uintptr_t) FIX2LONG(aiptr[1]); // Node ordinal
 		ainfo->pre_args_num = FIX2INT(aiptr[2]); // No ordinal resolving
 		ainfo->post_args_num = FIX2INT(aiptr[3]); // No ordinal resolving
 		ainfo->first_post_arg = FIX2INT(aiptr[4]); // Symbolic ordinal
 		ainfo->rest_arg = FIX2INT(aiptr[5]); // Symbolic ordinal
 		ainfo->block_arg = FIX2INT(aiptr[6]); // Symbolic ordinal
-		ainfo->kw_args = (NODE *) FIX2LONG(aiptr[7]); // Node ordinal
-		ainfo->kw_rest_arg = (NODE *) FIX2LONG(aiptr[8]); // Node ordinal
-		ainfo->opt_args = (NODE *) FIX2LONG(aiptr[9]); // Node ordinal
+		ainfo->kw_args = (NODE *) (uintptr_t) FIX2LONG(aiptr[7]); // Node ordinal
+		ainfo->kw_rest_arg = (NODE *) (uintptr_t) FIX2LONG(aiptr[8]); // Node ordinal
+		ainfo->opt_args = (NODE *) (uintptr_t) FIX2LONG(aiptr[9]); // Node ordinal
 		// Resolve nodes
 		ord = (int) (((VALUE) ainfo->pre_init) & 0xFFFFFFFF);
 		if (ord < -1 || ord >= relocs->nodes_len)

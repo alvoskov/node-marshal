@@ -8,7 +8,7 @@
  * Fragments from Ruby source code are used here
  * (mainly from node.c, gc.c)
  *
- * License: 2-clause BSD
+ * License: BSD-2-Clause
  *
  */
 #include <stdio.h>

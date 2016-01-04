@@ -163,7 +163,7 @@ EOS
 	end
 
 	# Test expressions like x['a'] &&= true or x['b'] ||= false
-   # (they use NODE_OP_ASGN1 node and symbols that cannot be represented
+	# (they use NODE_OP_ASGN1 node and symbols that cannot be represented
 	# by String value)
 	def test_node_op_asgn1
 		program = <<EOS

@@ -18,14 +18,14 @@ The key features of node-marshal gem:
 
 Changelog:
 - 04.JAN.2016 - 0.2.0
-		- Bugfix: || and && in NODE_OP_ASGN1 (e.g. in x['a'] ||= 'b' or x['b'] &&= false)
-		  (this bug caused segfaults in some cases)
-      - Bugfix: NodeMarshal#dump_node_short
-		- Format version changed to NODEMARSHAL11 (support of symbols not representable in
-		  the form of String is added)
-		- show_offsets property for controlling verbosity of NodeMarshal#dump_node_short output
-		- Improved information about licenses
-		- Improved rdoc documentation
+	- Bugfix: || and && in NODE_OP_ASGN1 (e.g. in x['a'] ||= 'b' or x['b'] &&= false)
+	  (this bug caused segfaults in some cases)
+	- Bugfix: NodeMarshal#dump_node_short
+	- Format version changed to NODEMARSHAL11 (support of symbols not representable in
+	  the form of String is added)
+	- show_offsets property for controlling verbosity of NodeMarshal#dump_node_short output
+	- Improved information about licenses
+	- Improved rdoc documentation
 - 24.DEC.2015 - 0.1.2
       - Ruby 2.3.x preliminary support (including &. safe navigation operator)
       - Bugfix: NODE_MATCH3 (a =~ /abc/) issue (reported by Gregory Siehień)
