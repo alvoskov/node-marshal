@@ -78,8 +78,10 @@ static int base85_encode_buf_len(int len)
 	return buf_len;
 }
 
-/* Encode string to modified BASE85 ASCII.
-   Call base85_init_tables before using of this function */
+/* 
+ * Encode string to modified BASE85 ASCII.
+ * Note: call base85_init_tables before using of this function
+ */
 VALUE base85r_encode(VALUE input)
 {
 	VALUE output;
@@ -131,8 +133,10 @@ VALUE base85r_encode(VALUE input)
 }
 
 
-/* Decode string in modified BASE85 ASCII format.
-   Call base85_init_tables before using of this function */
+/* 
+ * Decode string in modified BASE85 ASCII format.
+ * Note: call base85_init_tables before using of this function
+ */
 VALUE base85r_decode(VALUE input)
 {
 	int inp_len, out_len, pos, shift;

@@ -14,6 +14,8 @@
 
 
 /* Some constants */
+// Magic value with the version of the format
+#define NODEMARSHAL_MAGIC "NODEMARSHAL11"
 // Type of the node "Child"
 #define NT_NULL 0
 #define NT_UNKNOWN 1

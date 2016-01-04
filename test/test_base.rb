@@ -37,7 +37,6 @@ end
 ni.map {|x| fact(x) }
 EOS
 		assert_node_compiler(program)		
-#		test_string_eval(program, [1, 2, 6, 24, 120, 720, 5040, 40320, 362880], "Factorial");
 	end
 
 	# Simple ROT13 task that combines several language construction
@@ -159,6 +158,27 @@ EOS
 	def test_node_block_pass
 		program = <<-EOS
 [1, 2, 3, "A"].map(&:class)
+EOS
+		assert_node_compiler(program)
+	end
+
+	# Test expressions like x['a'] &&= true or x['b'] ||= false
+   # (they use NODE_OP_ASGN1 node and symbols that cannot be represented
+	# by String value)
+	def test_node_op_asgn1
+		program = <<EOS
+x = {a: [1234], b: [5678, 2],
+	and1: true, and2: true, and3: false, and4: false,
+	or1:  true, or2:  true, or3:  false, or4:  false}
+x[:a] &&= 'test'
+x[:b] ||= 'qqq'
+
+x[:and1] &&= false; x[:and2] &&= true
+x[:and3] &&= false; x[:and4] &&= true
+
+x[:or1] ||= false; x[:or2] ||= true
+x[:or3] ||= false; x[:or4] ||= true
+x
 EOS
 		assert_node_compiler(program)
 	end

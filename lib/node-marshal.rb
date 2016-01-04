@@ -31,7 +31,9 @@ class NodeMarshal
 	# - +opts+ -- Hash with options (+:compress+, +:so_path+)
 	#   +:compress+ can be +true+ or +false+, +:so_path+ is a test string 
 	#   with the command for nodemarshal.so inclusion (default is 
-	#   require_relative '../ext/node-marshal/nodemarshal.so')
+	#   <tt>require_relative '../ext/node-marshal/nodemarshal.so'</tt>)
+	#
+	# See also NodeMarshal::compile_rb_file
 	def to_compiled_rb(outfile, *args)
 		compress = true
 		so_path = "require_relative '../ext/node-marshal/nodemarshal.so'"
@@ -80,6 +82,12 @@ EOS
 		return txt
 	end
 
+	# call-seq:
+	#   NodeMarshal::compile_rb_file(outfile, inpfile, opts)
+	# 
+   # Reads +.rb+ file (Ruby source) and compiles it to .rb file containing
+	# compressed AST node and its loader. This functions is an envelope for
+	# NodeMarshal#to_compiled_rb
 	def self.compile_rb_file(outfile, inpfile, *args)
 		node = NodeMarshal.new(:srcfile, inpfile)
 		node.to_compiled_rb(outfile, *args)
@@ -117,7 +125,7 @@ EOS
 	end
 
 	# call-seq:
-	#   obj.get_safe_symbols
+	#   obj.get_safe_symbols(our_symbols)
 	#
 	# Returns an array that contains strings with the names of symbols that are safe
 	# to change. It excludes symbols that are present in the table of literals (and their derivatives
@@ -189,7 +197,7 @@ EOS
 	end
 
 	# call-seq:
-	#   obj.rebuld
+	#   obj.rebuild
 	#
 	# Rebuilds the node by converting it to the binary dump and further restoring
 	# of it from this dump. It doesn't change the original node and returns rebuilt

@@ -35,7 +35,7 @@ class TestHashTree
 			@depth = depth
 			@value = {:depth => depth, :data => [], :leaves =>[] }
 			data_size.times do
-				case rnd.rand(30000) % 6
+				case rnd.rand(30000) % 7
 				when 0
 					@value[:data] << 10**(rnd.rand(600000) * 0.001 - 300)
 				when 1
@@ -51,6 +51,9 @@ class TestHashTree
 				when 5
 					a, b = rnd.rand(100), rnd.rand(10)
 					@value[:data] << (a...(a + b))
+				when 6
+					rndsym = (Random.rand(1_000_000_000).to_s(36)).to_sym
+					@value[:data] << rndsym
 				else
 					nil
 				end
@@ -122,7 +125,7 @@ class TestComplex < Test::Unit::TestCase
 		puts "  Source code size: %d bytes" % tree_str.length
 		puts "  Binary data size: %d bytes" % tree_bin.length
 		# Clear the memory
-		node = nil; GC.start
+		node = nil; GC.enable; GC.start
 		# Load the node from the disk and turn it to tree
 		puts 'Loading the node...'
 		node = NodeMarshal.new(:binfile, 'node.bin')

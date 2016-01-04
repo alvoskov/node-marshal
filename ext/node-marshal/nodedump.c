@@ -204,6 +204,23 @@ int LeafTableInfo_addEntry(LeafTableInfo *lti, VALUE key, VALUE value)
 	}
 }
 
+/*
+ * Adds Ruby ID data type as the entry to the LeafTableInfo struct.
+ * Main features:
+ * 1) ID will be converted to Fixnum
+ * 2) If ID can be converted to string by rb_id2str it will be saved as
+      String object. Otherwise it will be converted to Fixnum.
+ */
+int LeafTableInfo_addIDEntry(LeafTableInfo *lti, ID id)
+{
+	VALUE r_idval = rb_id2str(id);
+	if (TYPE(r_idval) != T_STRING)
+	{
+		r_idval = INT2FIX(id);
+	}
+	return LeafTableInfo_addEntry(lti, INT2FIX(id), r_idval);
+}
+
 VALUE LeafTableInfo_getLeavesTable(LeafTableInfo *lti)
 {
 	VALUE key, keys = rb_funcall(lti->vals, rb_intern("keys"), 0);
@@ -475,7 +492,7 @@ VALUE NODEInfo_toHash(NODEInfo *info)
 	VALUE args;
 	int i, j, id;
 	// Add some signatures
-	rb_hash_aset(ans, ID2SYM(rb_intern("MAGIC")), rb_str_new2("NODEMARSHAL10"));
+	rb_hash_aset(ans, ID2SYM(rb_intern("MAGIC")), rb_str_new2(NODEMARSHAL_MAGIC));
 	rb_hash_aset(ans, ID2SYM(rb_intern("RUBY_PLATFORM")),
 		rb_const_get(rb_cObject, rb_intern("RUBY_PLATFORM")));
 	rb_hash_aset(ans, ID2SYM(rb_intern("RUBY_VERSION")),
@@ -573,7 +590,7 @@ static void NODEInfo_addValue(NODEInfo *info, VALUE value)
  * Function counts number of nodes and fills NODEInfo struct
  * that is neccessary for the node saving to the HDD
  */
-int count_num_of_nodes(NODE *node, NODE *parent, NODEInfo *info)
+static int count_num_of_nodes(NODE *node, NODE *parent, NODEInfo *info)
 {
 	int ut[3], num, offset;
 	if (node == 0)
@@ -632,7 +649,7 @@ int count_num_of_nodes(NODE *node, NODE *parent, NODEInfo *info)
 		}
 		else if (ut[0] == NT_ID)
 		{
-			LeafTableInfo_addEntry(&info->syms, INT2FIX(node->u1.id), rb_id2str(node->u1.id));
+			LeafTableInfo_addIDEntry(&info->syms, node->u1.id);
 		}
 		else if (ut[0] == NT_VALUE)
 		{
@@ -650,7 +667,7 @@ int count_num_of_nodes(NODE *node, NODE *parent, NODEInfo *info)
 			{
 				ID sym = *idtbl++;
 				rb_ary_push(idtbl_ary, INT2FIX(sym));
-				LeafTableInfo_addEntry(&info->syms, INT2FIX(sym), rb_id2str(sym));
+				LeafTableInfo_addIDEntry(&info->syms, sym);
 			}
 			LeafTableInfo_addEntry(&info->idtabs, tkey, idtbl_ary);
 		}
@@ -665,7 +682,7 @@ int count_num_of_nodes(NODE *node, NODE *parent, NODEInfo *info)
 		}
 		else if (ut[1] == NT_ID)
 		{
-			LeafTableInfo_addEntry(&info->syms, INT2FIX(node->u2.id), rb_id2str(node->u2.id));
+			LeafTableInfo_addIDEntry(&info->syms, node->u2.id);
 		}
 		else if (ut[1] == NT_VALUE)
 		{
@@ -685,7 +702,7 @@ int count_num_of_nodes(NODE *node, NODE *parent, NODEInfo *info)
 		}
 		else if (ut[2] == NT_ID)
 		{
-			LeafTableInfo_addEntry(&info->syms, INT2FIX(node->u3.id), rb_id2str(node->u3.id));
+			LeafTableInfo_addIDEntry(&info->syms, node->u3.id);
 		}
 		else if (ut[2] == NT_ARGS)
 		{
@@ -709,29 +726,29 @@ int count_num_of_nodes(NODE *node, NODE *parent, NODEInfo *info)
 
 			asym = ainfo->first_post_arg; rb_ary_push(varg, INT2FIX(asym)); // ID
 			if (asym != 0)
-				LeafTableInfo_addEntry(&info->syms, INT2FIX(asym), rb_id2str(asym));
+				LeafTableInfo_addIDEntry(&info->syms, asym);
 
 			asym = ainfo->rest_arg; rb_ary_push(varg, INT2FIX(asym)); // ID
 			if (asym != 0)
-				LeafTableInfo_addEntry(&info->syms, INT2FIX(asym), rb_id2str(asym));
+				LeafTableInfo_addIDEntry(&info->syms, asym);
 
 			asym = ainfo->block_arg; rb_ary_push(varg, INT2FIX(asym)); // ID
 			if (asym != 0)
-				LeafTableInfo_addEntry(&info->syms, INT2FIX(asym), rb_id2str(asym));
+				LeafTableInfo_addIDEntry(&info->syms, asym);
 			rb_ary_push(varg, value_to_str((VALUE) ainfo->kw_args));
 			rb_ary_push(varg, value_to_str((VALUE) ainfo->kw_rest_arg));
 			rb_ary_push(varg, value_to_str((VALUE) ainfo->opt_args));
 
 			LeafTableInfo_addEntry(&info->args, value_to_str((VALUE) ainfo), varg);
 #else
-			rb_raise(rb_eArgError, "NT_ARGS entry withour USE_RB_ARGS_INFO");
+			rb_raise(rb_eArgError, "NT_ARGS entry without USE_RB_ARGS_INFO");
 #endif
 		}
 		else if (ut[2] == NT_ENTRY)
 		{
 			ID gsym = node->u3.entry->id;
 			// Save symbol to the symbol table
-			int newid = LeafTableInfo_addEntry(&info->syms, INT2FIX(gsym), rb_id2str(gsym));
+			int newid = LeafTableInfo_addIDEntry(&info->syms, gsym);
 			LeafTableInfo_addEntry(&info->gentries, value_to_str(node->u3.value), INT2FIX(newid));
 		}
 		else if (ut[2] != NT_LONG && ut[2] != NT_NULL)
@@ -799,10 +816,9 @@ void rbstr_printf(VALUE str, const char *fmt, ...)
 }
 
 #define PRINT_NODE_TAB for (j = 0; j < tab; j++) rbstr_printf(str, "  ");
-void print_node(VALUE str, NODE *node, int tab)
+static void print_node(VALUE str, NODE *node, int tab, int show_offsets)
 {
 	int i, j, type, ut[3];
-	int show_offsets = 0;
 	VALUE uref[3];
 
 	PRINT_NODE_TAB
@@ -837,7 +853,7 @@ void print_node(VALUE str, NODE *node, int tab)
 		if (ut[i] == NT_NODE)
 		{
 			if (nd_type(node) != NODE_OP_ASGN2 || i != 2)
-				print_node(str, RNODE(uref[i]), tab + 1);
+				print_node(str, RNODE(uref[i]), tab + 1, show_offsets);
 			else
 			{
 				if (ut[i] != 0 && TYPE(ut[i]) != T_NODE)
@@ -855,7 +871,7 @@ void print_node(VALUE str, NODE *node, int tab)
 			PRINT_NODE_TAB; rbstr_printf(str, "  ");
 			if (show_offsets)
 			{
-				rbstr_printf(str, ">| ADR: %"PRIxPTR" TYPE: %d  TEXT: %s\n",
+				rbstr_printf(str, ">| ADR: %"PRIxPTR"; CLASS: %s (TYPE %d); VALUE: %s\n",
 					(intptr_t) uref[i],
 					class_name, TYPE(uref[i]),
 					RSTRING_PTR(rb_funcall(uref[i], rb_intern("to_s"), 0)));
@@ -870,10 +886,23 @@ void print_node(VALUE str, NODE *node, int tab)
 		else if (ut[i] == NT_ID)
 		{
 			PRINT_NODE_TAB; rbstr_printf(str, "  ");
-			if (show_offsets)
-				rbstr_printf(str, ">| ID: %d; SYMBOL: %s\n", (ID) uref[i], RSTRING_PTR(rb_id2str(uref[i])));
+			const char *str_null = "<NULL>", *str_intern = "<NONAME>";
+			const char *str_sym;
+			if (uref[i] == 0)
+				str_sym = str_null;
 			else
-				rbstr_printf(str, ">| SYMBOL: :%s\n", RSTRING_PTR(rb_id2str(uref[i])));
+			{
+				VALUE rbstr_sym = rb_id2str(uref[i]);
+				if (TYPE(rbstr_sym) == T_STRING)
+					str_sym = RSTRING_PTR(rb_id2str(uref[i]));
+				else
+					str_sym = str_intern;
+			}
+
+			if (show_offsets)
+				rbstr_printf(str, ">| ID: %d; SYMBOL: :%s\n", (ID) uref[i], str_sym);
+			else
+				rbstr_printf(str, ">| SYMBOL: :%s\n", str_sym);
 		}
 		else if (ut[i] == NT_LONG)
 		{
@@ -927,7 +956,21 @@ void resolve_syms_ords(VALUE data, NODEObjAddresses *relocs)
 	relocs->syms_len = RARRAY_LEN(tbl_val);
 	relocs->syms_adr = ALLOC_N(ID, relocs->syms_len);
 	for (i = 0; i < relocs->syms_len; i++)
-		relocs->syms_adr[i] = rb_intern(RSTRING_PTR(RARRAY_PTR(tbl_val)[i]));
+	{
+		VALUE r_sym = RARRAY_PTR(tbl_val)[i];
+		if (TYPE(r_sym) == T_STRING)
+		{
+			relocs->syms_adr[i] = rb_intern(RSTRING_PTR(r_sym));
+		}
+		else if (TYPE(r_sym) == T_FIXNUM)
+		{
+			relocs->syms_adr[i] = (ID) FIX2INT(r_sym);
+		}
+		else
+		{
+			rb_raise(rb_eArgError, "Symbols table is corrupted");
+		}
+	}
 }
 
 void resolve_lits_ords(VALUE data, NODEObjAddresses *relocs)
@@ -1215,7 +1258,7 @@ static VALUE check_hash_magic(VALUE data)
 	VALUE val, refval;
 	// MAGIC signature must be valid
 	val = get_hash_strfield(data, "MAGIC");
-	if (strcmp("NODEMARSHAL10", RSTRING_PTR(val)))
+	if (strcmp(NODEMARSHAL_MAGIC, RSTRING_PTR(val)))
 		rb_raise(rb_eArgError, "Bad value of MAGIC signature");
 	// RUBY_PLATFORM signature must match the current platform
 	val = get_hash_strfield(data, "RUBY_PLATFORM"); 
@@ -1307,6 +1350,9 @@ static VALUE m_nodedump_from_memory(VALUE self, VALUE dump)
 
 
 /*
+ * call-seq:
+ *   obj.symbols
+ *
  * Return array with the list of symbols
  */
 static VALUE m_nodedump_symbols(VALUE self)
@@ -1343,8 +1389,12 @@ static VALUE m_nodedump_symbols(VALUE self)
 }
 
 /*
- * Replace one symbol by another
- * (to be used for code obfuscation)
+ * call-seq:
+ *   obj.change_symbol(old_sym, new_sym)
+ *
+ * Replace one symbol by another (to be used for code obfuscation)
+ * - +old_sym+ -- String that contains symbol name to be replaced 
+ * - +new_sym+ -- String that contains new name of the symbol
  */
 static VALUE m_nodedump_change_symbol(VALUE self, VALUE old_sym, VALUE new_sym)
 {
@@ -1540,6 +1590,7 @@ static VALUE m_nodedump_from_string(VALUE self, VALUE str)
 static VALUE m_nodedump_init(VALUE self, VALUE source, VALUE info)
 {
 	ID id_usr;
+	rb_iv_set(self, "@show_offsets", Qfalse);
 	Check_Type(source, T_SYMBOL);
 	id_usr = SYM2ID(source);
 	if (id_usr == rb_intern("srcfile"))
@@ -1571,8 +1622,8 @@ static VALUE m_nodedump_init(VALUE self, VALUE source, VALUE info)
  * call-seq:
  *   obj.dump_tree
  * 
- * Transforms Ruby syntax tree (NODE) to the text string using
- * rb_parser_dump_tree function from node.c (see Ruby source code).
+ * Transforms Ruby syntax tree (NODE) to the String using
+ * +rb_parser_dump_tree+ function from +node.c+ (see Ruby source code).
  */
 static VALUE m_nodedump_parser_dump_tree(VALUE self)
 {
@@ -1581,15 +1632,51 @@ static VALUE m_nodedump_parser_dump_tree(VALUE self)
 }
 
 /*
- * Prints the node tree in the short variant
+ * call-seq:
+ *   obj.dump_tree_short
+ *
+ * Transforms Ruby syntax tree (NODE) to the String using custom function
+ * instead of +rb_parser_dump_tree+ function.
+ *
+ * See also #show_offsets, #show_offsets=
  */
 static VALUE m_nodedump_dump_tree_short(VALUE self)
 {
 	VALUE str = rb_str_new2(""); // Output string
 	NODE *node = RNODE(rb_iv_get(self, "@node"));
-	print_node(str, node, 0);
+	int show_offsets = (rb_iv_get(self, "@show_offsets") == Qtrue) ? 1 : 0;
+	print_node(str, node, 0, show_offsets);
 	return str;
 }
+
+/*
+ * call-seq:
+ *   obj.show_offsets
+ *
+ * Returns show_offsets property (used by NodeMarshal#dump_tree_short)
+ * It can be either true or false
+ */
+static VALUE m_nodedump_show_offsets(VALUE self)
+{
+	return rb_iv_get(self, "@show_offsets");
+}
+
+/*
+ * call-seq:
+ *   obj.show_offsets=
+ *
+ * Sets show_offsets property (used by NodeMarshal#dump_tree_short)
+ * It can be either true or false
+ */
+static VALUE m_nodedump_set_show_offsets(VALUE self, VALUE value)
+{
+	if (value != Qtrue && value != Qfalse)
+	{
+		rb_raise(rb_eArgError, "show_offsets property must be either true or false");
+	}
+	return rb_iv_set(self, "@show_offsets", value);
+}
+
 
 /*
  * call-seq:
@@ -1604,7 +1691,7 @@ static VALUE m_nodedump_dump_tree_short(VALUE self)
  * 
  * <i>Part 1: Signatures</i>
  *
- * - <tt>MAGIC</tt> -- NODEMARSHAL10
+ * - <tt>MAGIC</tt> -- NODEMARSHAL11
  * - <tt>RUBY_PLATFORM</tt> -- saved <tt>RUBY_PLATFORM</tt> constant value
  * - <tt>RUBY_VERSION</tt>  -- saved <tt>RUBY_VERSION</tt> constant value
  *
@@ -1614,7 +1701,8 @@ static VALUE m_nodedump_dump_tree_short(VALUE self)
  * its identifier that is used in the node tree.
  *
  * - <tt>literals</tt> -- program literals (strings, ranges etc.)
- * - <tt>symbols</tt> -- program symbols
+ * - <tt>symbols</tt> -- program symbols (values have either String or Fixnum
+ *   data type; numbers are used for symbols that cannot be represented as strings)
  * - <tt>global_entries</tt> -- global variables information
  * - <tt>id_tables</tt> -- array of arrays. Each array contains symbols IDs
  * - <tt>args</tt> -- information about code block argument(s)
@@ -1867,7 +1955,7 @@ static VALUE m_base85r_decode(VALUE obj, VALUE input)
 }
 
 /* call-seq:
- *   obj.to_bin
+ *   obj.to_text
  * 
  * Converts NodeMarshal class example to the text string (modified Base85 encoding) that
  * can be saved to the file and used for loading the node from the file.
@@ -1887,7 +1975,6 @@ static VALUE m_nodedump_node(VALUE self)
 {
 	return rb_iv_get(self, "@node");
 }
-
 
 /*
  * This class can load and save Ruby code in the form of the
@@ -1917,6 +2004,8 @@ void Init_nodemarshal()
 	rb_define_method(cNodeMarshal, "dump_tree", RUBY_METHOD_FUNC(m_nodedump_parser_dump_tree), 0);
 	rb_define_method(cNodeMarshal, "dump_tree_short", RUBY_METHOD_FUNC(m_nodedump_dump_tree_short), 0);
 	rb_define_method(cNodeMarshal, "compile", RUBY_METHOD_FUNC(m_nodedump_compile), 0);
+	rb_define_method(cNodeMarshal, "show_offsets", RUBY_METHOD_FUNC(m_nodedump_show_offsets), 0);
+	rb_define_method(cNodeMarshal, "show_offsets=", RUBY_METHOD_FUNC(m_nodedump_set_show_offsets), 1);
 	// Methods for working with the information about the node
 	// a) literals, symbols, generic information
 	rb_define_method(cNodeMarshal, "symbols", RUBY_METHOD_FUNC(m_nodedump_symbols), 0);
