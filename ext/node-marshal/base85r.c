@@ -10,8 +10,8 @@
  * 2) big-endian 5-byte numbers (base 85)
  * 3) empty string: arbitrary two bytes
  *
- * (C) 2015 Alexey Voskov
- * License: 2-clause BSD
+ * (C) 2015-2016 Alexey Voskov
+ * License: BSD-2-Clause
  */
 #include <stdio.h>
 #include <stdlib.h>

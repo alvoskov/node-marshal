@@ -165,9 +165,10 @@ static int nodes_child_info[][4] =
 
 
 
-/** 
- * @brief Check the correctness of nodes table from the viewpoint
- * This function is based on Ruby 2.2.1 source code (node.c) */
+/*
+ * Check the correctness of nodes table from the viewpoint
+ * This function is based on Ruby source code (node.c)
+ */
 void check_nodes_child_info(int pos)
 {
 	int type = nodes_child_info[pos][0];
@@ -565,22 +566,36 @@ void check_nodes_child_info(int pos)
 	
 }
 
-
+/*
+ * Converts nodes_child_info 2D array of int into nodes_ctbl 1D array of int
+ *
+ * nodes_child_info is similar to hash by the structure: each 1D subarray
+ * has the next structure:
+ *   {NODE_ID, NT_CHILD1_TYPE, NT_CHILD2_TYPE, NT_CHILD3_TYPE}
+ */
 void init_nodes_table(int *nodes_ctbl, int num_of_entries)
 {
-	int pos, offset, i;
+	int pos, i;
+	/* Check the input array using information from Ruby source code */
 	for (pos = 0; nodes_child_info[pos][0] != -1; pos++)
 	{
 		check_nodes_child_info(pos);
 	}
-	
+	/* Initialize output array by NT_UNKNOWN (if node is not defined
+      in the input table the types of its childs are unknown) */	
 	for (i = 0; i < num_of_entries * 3; i++)
 	{
 		nodes_ctbl[i] = NT_UNKNOWN;
 	}
+	/* Fill output array */
 	for (pos = 0; nodes_child_info[pos][0] != -1; pos++)
 	{
-		offset = (nodes_child_info[pos][0]) * 3;
+		int index = nodes_child_info[pos][0], offset;
+		if (index < 0 || index > num_of_entries)
+		{
+			rb_raise(rb_eArgError, "NODE ID %d is out or nodes_ctbl array boundaries", index);
+		}
+		offset = index * 3;
 		nodes_ctbl[offset++] = nodes_child_info[pos][1];
 		nodes_ctbl[offset++] = nodes_child_info[pos][2];
 		nodes_ctbl[offset++] = nodes_child_info[pos][3];

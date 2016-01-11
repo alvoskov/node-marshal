@@ -406,7 +406,6 @@ static int dump_node_value(NODEInfo *info, char *ptr, NODE *node, int type, VALU
 		}
 		else
 		{
-			//memcpy(ptr, &id, sizeof(VALUE));
 			switch(type)
 			{
 				case NT_ENTRY: return DUMP_RAW_VALUE(VL_GVAR, id);
@@ -439,7 +438,7 @@ static VALUE dump_nodes(NODEInfo *info)
 		nt = nd_type(node);
 		rtypes = (char *) ptr; ptr += sizeof(int);
 		flags_len = value_to_bin(node->flags >> 5, (unsigned char *) ptr); ptr += flags_len;
-		//memcpy(ptr, &(node->flags), sizeof(VALUE)); ptr += sizeof(VALUE);
+
 		ut[0] = nodes_ctbl[nt * 3];
 		ut[1] = nodes_ctbl[nt * 3 + 1];
 		ut[2] = nodes_ctbl[nt * 3 + 2];
@@ -473,7 +472,6 @@ static VALUE dump_nodes(NODEInfo *info)
 		rtypes[3] = flags_len;
 	}
 	rb_str_resize(nodes_bin, (int) (ptr - bin) + 1);
-	//printf("%d", ptr - bin);
 	return nodes_bin;
 }
 
@@ -816,6 +814,13 @@ void rbstr_printf(VALUE str, const char *fmt, ...)
 }
 
 #define PRINT_NODE_TAB for (j = 0; j < tab; j++) rbstr_printf(str, "  ");
+/*
+ * Recursively transforms node into Ruby string
+ *   str -- output Ruby string
+ *   node -- input Ruby NODE
+ *   tab -- number of tabulations during print
+ *   show_offsets -- 0/1 show/hide addresses and symbol IDs
+ */
 static void print_node(VALUE str, NODE *node, int tab, int show_offsets)
 {
 	int i, j, type, ut[3];
@@ -831,12 +836,14 @@ static void print_node(VALUE str, NODE *node, int tab, int show_offsets)
 
 	if (show_offsets)
 	{
-		rbstr_printf(str, "@ %s | %16"PRIxPTR " %16"PRIxPTR " %16"PRIxPTR "\n", ruby_node_name(type),
-			(intptr_t) node->u1.value, (intptr_t) node->u2.value, (intptr_t) node->u3.value);
+		rbstr_printf(str, "@ %s | %16"PRIxPTR " %16"PRIxPTR " %16"PRIxPTR " (line %d)\n",
+			ruby_node_name(type),
+			(intptr_t) node->u1.value, (intptr_t) node->u2.value, (intptr_t) node->u3.value,
+			nd_line(node));
 	}
 	else
 	{
-		rbstr_printf(str, "@ %s\n", ruby_node_name(type));
+		rbstr_printf(str, "@ %s (line %d)\n", ruby_node_name(type), nd_line(node));
 	}
 
 	ut[0] = nodes_ctbl[type * 3];
@@ -1151,6 +1158,23 @@ void resolve_args_ords(VALUE data, NODEObjAddresses *relocs)
 }
 #endif
 
+/*
+ * Transforms binary data with nodes descriptions into Ruby AST (i.e. 
+ * ternary tree of nodes). Each node is represented in the next binary format:
+ *
+ * [4 bytes -- pointers info] [node flags] [child ORD1] [child ORD2] [child ORD3]
+ * 
+ * Pointers info:
+ *   BYTE -- child 1 info (bits 7..4 -- ordinal type, bits 3..0 -- ordinal size, bytes)
+ *   BYTE -- child 2 info
+ *   BYTE -- child 3 info
+ *   BYTE -- node flags length, bytes
+ * Node flags:
+ *   node->flags field packed by bin_to_value function
+ *   child ORDi  Ordinal of ith node child packed by bin_to_value_function
+ *               (it will be transformed to the real address in memory, i.e. pointer
+ *                or symbol ID during data loading)
+ */
 void load_nodes_from_str(VALUE data, NODEObjAddresses *relocs)
 {
 	int i, j;

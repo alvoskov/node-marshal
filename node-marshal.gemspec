@@ -15,6 +15,7 @@ Gem::Specification.new do |s|
 		Dir.glob("ext/node-marshal/*.h") +
 		Dir.glob("bin/noderbc.bat") +
 		Dir.glob("bin/noderbc")
+	s.homepage = "https://github.com/dig386/node-marshal"
 	s.extensions = "ext/node-marshal/extconf.rb"
 	s.name = "node-marshal"
 	s.summary = "Transforms Ruby sources to binary nodes (trees) that can be saved and loaded"
@@ -34,4 +35,3 @@ EOS
 	s.extra_rdoc_files = ['README.rdoc']
 	s.rdoc_options << '--main' << 'README.rdoc'
 end
-

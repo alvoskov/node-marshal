@@ -17,7 +17,7 @@ The key features of node-marshal gem:
 - 2-clause BSD license suitable for creation of custom source code protection system
 
 Changelog:
-- 04.JAN.2016 - 0.2.0
+- 11.JAN.2016 - 0.2.0
 	- Bugfix: || and && in NODE_OP_ASGN1 (e.g. in x['a'] ||= 'b' or x['b'] &&= false)
 	  (this bug caused segfaults in some cases)
 	- Bugfix: NodeMarshal#dump_node_short
