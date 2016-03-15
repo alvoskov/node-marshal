@@ -120,6 +120,7 @@ class TestComplex < Test::Unit::TestCase
 		tree_str = tree_src.to_s
 		node = NodeMarshal.new(:srcmemory, tree_str)
 		tree_bin = node.to_bin
+		puts node.inspect
 
 		File.open('node.bin', 'wb') {|fp| fp << tree_bin }
 		puts "  Source code size: %d bytes" % tree_str.length

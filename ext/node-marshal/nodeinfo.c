@@ -18,7 +18,15 @@
 #include <ruby/version.h>
 #include "nodedump.h"
 
-// Information about nodes types
+/* Information about nodes types
+
+   NODE_ARRAY contains an undocumented feature: if an array contains
+   more than 1 element the 2nd child of 2nd element will contain
+   a reference to the last element of the array (and have NT_NODE
+   not NT_LONG type)
+   Such child is ignored by GC because there is a reference to it
+   from another place of Ruby AST.
+ */
 static int nodes_child_info[][4] = 
 {
 	{NODE_BLOCK,    NT_NODE, NT_NULL, NT_NODE},
@@ -77,7 +85,7 @@ static int nodes_child_info[][4] =
 
 	{NODE_SUPER, NT_NULL, NT_NULL, NT_NODE},
 	{NODE_ZSUPER, NT_NULL, NT_NULL, NT_NULL},
-	{NODE_ARRAY,  NT_NODE, NT_LONG, NT_NODE},
+	{NODE_ARRAY,  NT_NODE, NT_LONG, NT_NODE}, /* 2nd child has undocumented variants (see above) */
 	{NODE_VALUES, NT_NODE, NT_LONG, NT_NODE},
 	{NODE_ZARRAY, NT_NULL, NT_NULL, NT_NULL},
 
@@ -582,7 +590,7 @@ void init_nodes_table(int *nodes_ctbl, int num_of_entries)
 		check_nodes_child_info(pos);
 	}
 	/* Initialize output array by NT_UNKNOWN (if node is not defined
-      in the input table the types of its childs are unknown) */	
+	   in the input table the types of its childs are unknown) */	
 	for (i = 0; i < num_of_entries * 3; i++)
 	{
 		nodes_ctbl[i] = NT_UNKNOWN;

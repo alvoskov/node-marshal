@@ -241,6 +241,11 @@ int LeafTableInfo_keyToID(LeafTableInfo *lti, VALUE key)
 	return (id == Qnil) ? -1 : FIX2INT(id);
 }
 
+VALUE LeafTableInfo_keyToValue(LeafTableInfo *lti, VALUE key)
+{
+	return rb_hash_aref(lti->vals, key);
+}
+
 /* The structure keeps information about the node
    that is required for its dumping to the file
    (mainly hashes with relocatable identifiers) */
@@ -253,6 +258,7 @@ typedef struct {
 #endif
 	LeafTableInfo gentries; // Global variables table
 	LeafTableInfo nodes; // Table of nodes
+	LeafTableInfo pnodes; // Table of parent nodes
 } NODEInfo;
 
 void NODEInfo_init(NODEInfo *info)
@@ -265,6 +271,7 @@ void NODEInfo_init(NODEInfo *info)
 #endif
 	LeafTableInfo_init(&(info->gentries));
 	LeafTableInfo_init(&(info->nodes));
+	LeafTableInfo_init(&(info->pnodes));
 }
 
 void NODEInfo_mark(NODEInfo *info)
@@ -277,6 +284,7 @@ void NODEInfo_mark(NODEInfo *info)
 #endif
 	LeafTableInfo_mark(&(info->gentries));
 	LeafTableInfo_mark(&(info->nodes));
+	LeafTableInfo_mark(&(info->pnodes));
 }
 
 void NODEInfo_free(NODEInfo *info)
@@ -425,6 +433,8 @@ static int dump_node_value(NODEInfo *info, char *ptr, NODE *node, int type, VALU
  * Converts information about nodes to the binary string.
  * It uses dump_node_value function for the low-level conversion
  * of node "leaves" to the actual binary data.
+ *
+ * See load_nodes_from_str for the descrpition of the binary string format.
  */
 static VALUE dump_nodes(NODEInfo *info)
 {
@@ -466,6 +476,29 @@ static VALUE dump_nodes(NODEInfo *info)
 			if (node->u1.value == 0) ut[0] = NT_NULL;
 			if (node->u2.value == 0) ut[1] = NT_NULL;
 			if (node->u3.value == 0) ut[2] = NT_NULL;
+		}
+		
+		if (nt = NODE_ARRAY)
+		{
+			/* Special undocumented case: the second child of the
+			 * second element of an array contains reference to the 
+			 * last element (NT_NODE) not length (NT_LONG) */
+			NODE *pnode1, *pnode2;
+			pnode1 = (NODE *) str_to_value(LeafTableInfo_keyToValue(&info->pnodes, value_to_str((VALUE) node)));
+			if (pnode1 != NULL && nd_type(pnode1) == NODE_ARRAY &&
+				(NODE *) pnode1->u3.value == node)
+			{
+				pnode2 = (NODE *) str_to_value(LeafTableInfo_keyToValue(&info->pnodes, value_to_str((VALUE) pnode1)));
+				if (nd_type(pnode2) != NODE_ARRAY ||
+				    (NODE *) pnode2->u1.value == pnode1 )
+				{
+					ut[1] = NT_NODE;
+				}
+				else if (pnode1->u2.value == 2 && node == (NODE *) node->u2.value)
+				{
+					ut[1] = NT_NODE;
+				}
+			}
 		}
 
 		rtypes[0] = dump_node_value(info, ptr, node, ut[0], node->u1.value, 1);
@@ -590,6 +623,28 @@ static void NODEInfo_addValue(NODEInfo *info, VALUE value)
 }
 
 /*
+ * Adds the information about Ruby NODE to the NODEInfo struct.
+ * It keeps the addresses of the node and its parents
+ */
+static void NODEInfo_addNode(NODEInfo *info, NODE *node, NODE *pnode)
+{
+	VALUE node_adr = value_to_str((VALUE) node);
+	VALUE pnode_adr = value_to_str((VALUE) pnode);
+	LeafTableInfo_addEntry(&info->nodes, node_adr, node_adr);
+	LeafTableInfo_addEntry(&info->pnodes, node_adr, pnode_adr);
+}
+
+/*
+ * Returns ID of the node using its address (VALUE)
+ * It is used during the process of dumping Ruby AST to disk
+ * for replacing of memory addresses into ordinals
+ */
+static int NODEInfo_nodeAdrToID(NODEInfo *info, VALUE adr)
+{
+	return LeafTableInfo_keyToID(&info->nodes, adr);
+}
+
+/*
  * Function counts number of nodes and fills NODEInfo struct
  * that is neccessary for the node saving to the HDD
  */
@@ -643,7 +698,7 @@ static int count_num_of_nodes(NODE *node, NODE *parent, NODEInfo *info)
 		}
 		/* Save the ID of the node */
 		num = 1;
-		LeafTableInfo_addEntry(&info->nodes, value_to_str((VALUE) node), value_to_str((VALUE) node));
+		NODEInfo_addNode(info, node, parent);
 		/* Analyze node childs */
 		/* a) child 1 */
 		if (ut[0] == NT_NODE)
@@ -990,6 +1045,7 @@ void resolve_syms_ords(VALUE data, NODEObjAddresses *relocs)
 void resolve_lits_ords(VALUE data, NODEObjAddresses *relocs)
 {
 	VALUE tbl_val = rb_hash_aref(data, ID2SYM(rb_intern("literals")));
+	int i;
 	if (tbl_val == Qnil)
 	{
 		rb_raise(rb_eArgError, "Cannot find literals table");
@@ -1000,6 +1056,15 @@ void resolve_lits_ords(VALUE data, NODEObjAddresses *relocs)
 	}
 	relocs->lits_adr = RARRAY_PTR(tbl_val);
 	relocs->lits_len = RARRAY_LEN(tbl_val);
+	/* Mark all symbols as "immortal" (i.e. not collectable
+	   by Ruby GC): some of them can be used in the syntax tree! */
+	for (i = 0; i < relocs->lits_len; i++)
+	{
+		if (TYPE(relocs->lits_adr[i]) == T_SYMBOL)
+		{
+			SYM2ID(relocs->lits_adr[i]);
+		}
+	}
 }
 
 void resolve_gvars_ords(VALUE data, NODEObjAddresses *relocs)
@@ -1253,9 +1318,10 @@ void load_nodes_from_str(VALUE data, NODEObjAddresses *relocs)
 
 		// Fill classic node structure
 		node = relocs->nodes_adr[i];
-#ifdef RESET_GC_FLAGS
+//#ifdef RESET_GC_FLAGS
 		flags = flags & (~0x3); // Ruby 1.9.x -- specific thing
-#endif
+//#endif
+		//printf("%lX %lX\n", node->flags, (flags << 5) | T_NODE);
 		node->flags = (flags << 5) | T_NODE;
 		node->nd_reserved = 0;
 		node->u1.value = u[0];
@@ -1315,11 +1381,12 @@ static VALUE check_hash_magic(VALUE data)
 static VALUE m_nodedump_from_memory(VALUE self, VALUE dump)
 {
 	VALUE cMarshal, data, val, val_relocs;
+	VALUE gc_was_disabled;
 	int num_of_nodes;
 	NODEObjAddresses *relocs;
 	/* DISABLE GARBAGE COLLECTOR (required for stable loading
 	   of large node trees */
-	rb_gc_disable();
+	gc_was_disabled = rb_gc_disable();
 	/* Wrap struct for relocations */
 	val_relocs = Data_Make_Struct(cNodeObjAddresses, NODEObjAddresses,
 		NULL, NODEObjAddresses_free, relocs); // This data envelope cannot exist without NODE
@@ -1374,8 +1441,11 @@ static VALUE m_nodedump_from_memory(VALUE self, VALUE dump)
 	rb_iv_set(self, "@node", (VALUE) relocs->nodes_adr[0]);
 	rb_iv_set(self, "@num_of_nodes", INT2FIX(num_of_nodes));
 	rb_iv_set(self, "@obj_addresses", val_relocs);
-	rb_gc_enable();
-	rb_gc_start();
+	if (gc_was_disabled == Qfalse)
+	{
+		rb_gc_enable();
+		rb_gc_start();
+	}
 	return self;
 }
 
@@ -1548,10 +1618,10 @@ static VALUE m_nodedump_compile(VALUE self)
  */
 static VALUE m_nodedump_from_source(VALUE self, VALUE file)
 {
-	VALUE line = INT2FIX(1), f, node, filepath;
+	VALUE line = INT2FIX(1), f, node, filepath, gc_was_disabled;
 	const char *fname;
 
-	rb_gc_disable();
+	gc_was_disabled = rb_gc_disable();
 	rb_secure(1);
 	FilePathValue(file);
 	fname = StringValueCStr(file);
@@ -1563,11 +1633,14 @@ static VALUE m_nodedump_from_source(VALUE self, VALUE file)
 	/* Create node from the source */
 	f = rb_file_open_str(file, "r");
 	node = (VALUE) rb_compile_file(fname, f, NUM2INT(line));
-	rb_gc_enable();
-	rb_iv_set(self, "@node", node);
+	rb_iv_set(self, "@node", node);	
 	if ((void *) node == NULL)
 	{
 		rb_raise(rb_eArgError, "Error during string parsing");
+	}
+	if (gc_was_disabled == Qfalse)
+	{
+		rb_gc_enable();
 	}
 	return self;
 }
@@ -1577,9 +1650,10 @@ static VALUE m_nodedump_from_source(VALUE self, VALUE file)
  */
 static VALUE m_nodedump_from_string(VALUE self, VALUE str)
 {
-	VALUE line = INT2FIX(1), node;
+	VALUE line = INT2FIX(1), node, gc_was_disabled;
 	const char *fname = "STRING";
 	Check_Type(str, T_STRING);
+	gc_was_disabled = rb_gc_disable();	
 	rb_secure(1);
 	/* Create empty information about the file */
 	rb_iv_set(self, "@nodename", rb_str_new2("<main>"));
@@ -1594,11 +1668,13 @@ static VALUE m_nodedump_from_string(VALUE self, VALUE str)
 		rb_iv_set(self, "@filepath", rb_str_new2("<compiled>"));
 	}
 	/* Create node from the string */
-	rb_gc_disable();
 	node = (VALUE) rb_compile_string(fname, str, NUM2INT(line));
 	rb_iv_set(self, "@node", node);
-	rb_gc_enable();
-	rb_gc_start();
+	if (gc_was_disabled == Qfalse)
+	{
+		rb_gc_enable();
+		rb_gc_start();
+	}
 	if ((void *) node == NULL)
 	{
 		rb_raise(rb_eArgError, "Error during string parsing");
@@ -1750,9 +1826,9 @@ static VALUE m_nodedump_to_hash(VALUE self)
 {
 	NODE *node = RNODE(rb_iv_get(self, "@node"));
 	NODEInfo *info;
-	VALUE ans, num, val_info;
+	VALUE ans, num, val_info, gc_was_disabled;
 	// DISABLE GARBAGE COLLECTOR (important for dumping)
-	rb_gc_disable();
+	gc_was_disabled = rb_gc_disable();
 	// Convert the node to the form with relocs (i.e. the information about node)
 	// if such form is not present
 	val_info = rb_iv_get(self, "@nodeinfo");
@@ -1777,7 +1853,10 @@ static VALUE m_nodedump_to_hash(VALUE self)
 		ans = rb_iv_get(self, "@nodehash");
 	}
 	// ENABLE GARBAGE COLLECTOR (important for dumping)
-	rb_gc_enable();
+	if (gc_was_disabled == Qfalse)
+	{
+		rb_gc_enable();
+	}
 	return ans;
 }
 
@@ -1913,9 +1992,12 @@ VALUE m_node_to_ary(NODE *node)
 static VALUE m_nodedump_to_a(VALUE self)
 {
 	NODE *node = RNODE(rb_iv_get(self, "@node"));
-	rb_gc_disable();
+	VALUE gc_was_disabled = rb_gc_disable();
 	VALUE ary = m_node_to_ary(node);
-	rb_gc_enable();
+	if (gc_was_disabled == Qfalse)
+	{
+		rb_gc_enable();
+	}
 	return ary;
 }
 
@@ -1984,6 +2066,7 @@ static VALUE m_nodedump_inspect(VALUE self)
 			"      idtabs hash len (ID tables):     %d\n"
 			"      gentries hash len (Global vars): %d\n"
 			"      nodes hash len (Nodes):          %d\n"
+			"      pnodes hash len (Parent nodes):  %d\n"			
 #ifdef USE_RB_ARGS_INFO
 			"      args hash len (args info):       %d\n"
 #endif
@@ -1992,7 +2075,8 @@ static VALUE m_nodedump_inspect(VALUE self)
 			FIX2INT(rb_funcall(ninfo->lits.vals, rb_intern("length"), 0)),
 			FIX2INT(rb_funcall(ninfo->idtabs.vals, rb_intern("length"), 0)),
 			FIX2INT(rb_funcall(ninfo->gentries.vals, rb_intern("length"), 0)),
-			FIX2INT(rb_funcall(ninfo->nodes.vals, rb_intern("length"), 0))
+			FIX2INT(rb_funcall(ninfo->nodes.vals, rb_intern("length"), 0)),
+			FIX2INT(rb_funcall(ninfo->pnodes.vals, rb_intern("length"), 0))			
 #ifdef USE_RB_ARGS_INFO
 			,
 			FIX2INT(rb_funcall(ninfo->args.vals, rb_intern("length"), 0))

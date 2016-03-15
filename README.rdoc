@@ -17,7 +17,15 @@ The key features of node-marshal gem:
 - 2-clause BSD license suitable for creation of custom source code protection system
 
 Changelog:
-- ??.???.2016 - 0.2.?
+- ??.MAR.2016 - 0.2.1
+      - Bugfix: garbage collection of symbols kept in the literals table of the node dump
+        is now prohibited. Such GC caused hardly reproducible bugs after code loading.
+        (thanks to Gregory Siehień for suitable examples)
+      - Bugfix: improved parsing of NODE_ARRAY (correct processing of two cases of
+        not documented pointers (instead of longs) in 2nd child. It affects arrays
+        and hashed).
+      - Bugfix: now NodeMarshal class methods don't change the state of Ruby 
+        garbage collector
       - Improved NodeMarshal#dump_tree_short output (addresses of nodes are shown)
       - NodeMarshal#to_a method added (it shows extended information about Ruby AST
         including rb_args_info and ID *tbl internals)
