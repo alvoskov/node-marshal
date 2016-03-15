@@ -421,6 +421,11 @@ static int dump_node_value(NODEInfo *info, char *ptr, NODE *node, int type, VALU
 	}
 }
 
+/*
+ * Converts information about nodes to the binary string.
+ * It uses dump_node_value function for the low-level conversion
+ * of node "leaves" to the actual binary data.
+ */
 static VALUE dump_nodes(NODEInfo *info)
 {
 	int node_size = sizeof(int) + sizeof(VALUE) * 4;
@@ -836,8 +841,9 @@ static void print_node(VALUE str, NODE *node, int tab, int show_offsets)
 
 	if (show_offsets)
 	{
-		rbstr_printf(str, "@ %s | %16"PRIxPTR " %16"PRIxPTR " %16"PRIxPTR " (line %d)\n",
+		rbstr_printf(str, "@ %s | %16"PRIxPTR " | %16"PRIxPTR " %16"PRIxPTR " %16"PRIxPTR " (line %d)\n",
 			ruby_node_name(type),
+			(intptr_t) node,
 			(intptr_t) node->u1.value, (intptr_t) node->u2.value, (intptr_t) node->u3.value,
 			nd_line(node));
 	}
@@ -1775,6 +1781,145 @@ static VALUE m_nodedump_to_hash(VALUE self)
 	return ans;
 }
 
+
+VALUE m_node_to_ary(NODE *node)
+{
+	int i, j, type, ut[3];
+	VALUE uref[3];
+	VALUE entry = rb_ary_new();
+	/* Special case: NULL node */
+	if (node == NULL)
+	{
+		return Qnil;
+	}
+	/* Save node name */
+	type = nd_type(node);
+	rb_ary_push(entry, ID2SYM(rb_intern(ruby_node_name(type))));
+
+	ut[0] = nodes_ctbl[type * 3];
+	ut[1] = nodes_ctbl[type * 3 + 1];
+	ut[2] = nodes_ctbl[type * 3 + 2];
+
+	uref[0] = node->u1.value;
+	uref[1] = node->u2.value;
+	uref[2] = node->u3.value;
+
+//	if (type == NODE_ARRAY && (uref[1]) > 100)
+//	{
+//		printf("%s\n", ruby_node_name(nd_type(RNODE(uref[1]))));
+//	}
+
+	for (i = 0; i < 3; i++)
+	{
+		if (ut[i] == NT_NODE)
+		{
+			if (nd_type(node) != NODE_OP_ASGN2 || i != 2)
+			{
+				rb_ary_push(entry, m_node_to_ary(RNODE(uref[i])));
+			}
+			else
+			{
+				VALUE child = rb_ary_new();
+				if (ut[i] != 0 && TYPE(ut[i]) != T_NODE)
+					rb_raise(rb_eArgError, "print_node: broken node 0x%s", RSTRING_PTR(value_to_str(ut[i])));
+				rb_ary_push(child, ID2SYM(rb_intern("NODE_OP_ASGN2")));
+				rb_ary_push(child, LONG2NUM((intptr_t) RNODE(uref[i])->u1.value));
+				rb_ary_push(child, LONG2NUM((intptr_t) RNODE(uref[i])->u2.value));
+				rb_ary_push(child, LONG2NUM((intptr_t) RNODE(uref[i])->u3.value));
+				rb_ary_push(entry, child);
+			}
+		}
+		else if (ut[i] == NT_VALUE)
+		{
+			rb_ary_push(entry, uref[i]);
+		}
+		else if (ut[i] == NT_ID)
+		{
+			rb_ary_push(entry, ID2SYM( (ID) uref[i]));
+		}
+		else if (ut[i] == NT_LONG)
+		{
+			rb_ary_push(entry, LONG2NUM( (intptr_t) uref[i]));
+		}
+		else if (ut[i] == NT_NULL)
+		{
+			rb_ary_push(entry, Qnil);
+		}
+		else if (ut[i] == NT_ARGS)
+		{
+			VALUE rargs = rb_hash_new();
+			VALUE rargs_env = rb_ary_new();
+			ID id;
+#ifdef USE_RB_ARGS_INFO
+			struct rb_args_info *args = (void *) uref[i];
+
+			rb_hash_aset(rargs, ID2SYM(rb_intern("pre_init")), m_node_to_ary(args->pre_init));
+			rb_hash_aset(rargs, ID2SYM(rb_intern("post_init")), m_node_to_ary(args->post_init));
+
+			id = args->first_post_arg;
+			rb_hash_aset(rargs, ID2SYM(rb_intern("first_post_arg")), (id) ? ID2SYM(id) : Qnil);
+			id = args->rest_arg;
+			rb_hash_aset(rargs, ID2SYM(rb_intern("rest_arg")), (id) ? ID2SYM(id) : Qnil);
+			id = args->block_arg;
+			rb_hash_aset(rargs, ID2SYM(rb_intern("block_arg")), (id) ? ID2SYM(id) : Qnil);
+
+			rb_hash_aset(rargs, ID2SYM(rb_intern("kw_args")), m_node_to_ary(args->kw_args));
+			rb_hash_aset(rargs, ID2SYM(rb_intern("kw_rest_arg")), m_node_to_ary(args->kw_rest_arg));
+			rb_hash_aset(rargs, ID2SYM(rb_intern("opt_args")), m_node_to_ary(args->opt_args));
+#endif
+			rb_ary_push(rargs_env, ID2SYM(rb_intern("ARGS")));
+			rb_ary_push(rargs_env, rargs);
+			rb_ary_push(entry, rargs_env);
+		}
+		else if (ut[i] == NT_IDTABLE)
+		{
+			VALUE ridtbl = rb_ary_new();
+			VALUE idtbl_ary = rb_ary_new();
+			int j, len;
+
+			ID *idtbl = (ID *) uref[i];
+			len = (uref[i]) ? *idtbl++ : 0;
+			for (j = 0; j < len; j++)
+			{
+				ID sym = *idtbl++;
+				VALUE val = ID2SYM(sym);
+				rb_ary_push(idtbl_ary, val);
+			}
+			rb_ary_push(ridtbl, ID2SYM(rb_intern("IDTABLE")));
+			rb_ary_push(ridtbl, idtbl_ary);
+			rb_ary_push(entry, ridtbl);
+		}
+		else if (ut[i] == NT_ENTRY)
+		{
+			struct rb_global_entry *gentry;
+			gentry = (struct rb_global_entry *) uref[i];
+			rb_ary_push(entry, ID2SYM(gentry->id));
+		}
+		else
+		{
+			rb_ary_push(entry, ID2SYM(rb_intern("UNKNOWN")));
+		}
+	}
+	return entry;
+}
+
+/*
+ * call-seq:
+ *   obj.to_a
+ *
+ * Converts node to the array (mainly to allow exploration of AST
+ * by the user)
+ */
+static VALUE m_nodedump_to_a(VALUE self)
+{
+	NODE *node = RNODE(rb_iv_get(self, "@node"));
+	rb_gc_disable();
+	VALUE ary = m_node_to_ary(node);
+	rb_gc_enable();
+	return ary;
+}
+
+
 /*
  * call-seq:
  *   obj.to_bin
@@ -2026,6 +2171,7 @@ void Init_nodemarshal()
 	rb_define_method(cNodeMarshal, "to_hash", RUBY_METHOD_FUNC(m_nodedump_to_hash), 0);
 	rb_define_method(cNodeMarshal, "to_bin", RUBY_METHOD_FUNC(m_nodedump_to_bin), 0);
 	rb_define_method(cNodeMarshal, "to_text", RUBY_METHOD_FUNC(m_nodedump_to_text), 0);
+	rb_define_method(cNodeMarshal, "to_a", RUBY_METHOD_FUNC(m_nodedump_to_a), 0);
 	rb_define_method(cNodeMarshal, "dump_tree", RUBY_METHOD_FUNC(m_nodedump_parser_dump_tree), 0);
 	rb_define_method(cNodeMarshal, "dump_tree_short", RUBY_METHOD_FUNC(m_nodedump_dump_tree_short), 0);
 	rb_define_method(cNodeMarshal, "compile", RUBY_METHOD_FUNC(m_nodedump_compile), 0);

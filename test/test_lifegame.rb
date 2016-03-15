@@ -15,8 +15,14 @@ class TestLifeGame < Test::Unit::TestCase
 	def test_glider_gun
 		# Compile the class to the instuction sequence
 		bin = NodeMarshal.new(:srcfile, 'lifegame.rb')
+		require 'yaml'
+		bin.show_offsets = true
+		File.open("x.txt", "wb") {|fp| fp << bin.to_a.to_yaml}
+		File.open("y.txt", "wb") {|fp| fp << bin.dump_tree_short}
+		File.open("z.txt", "wb") {|fp| fp << bin.to_a}
 		puts bin.inspect
 		bin.compile.eval
+
 		# Calculate the life game
 		res_node = run_game
 		# Play the game of life without NodeMarshal

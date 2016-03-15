@@ -17,6 +17,10 @@ The key features of node-marshal gem:
 - 2-clause BSD license suitable for creation of custom source code protection system
 
 Changelog:
+- ??.???.2016 - 0.2.?
+      - Improved NodeMarshal#dump_tree_short output (addresses of nodes are shown)
+      - NodeMarshal#to_a method added (it shows extended information about Ruby AST
+        including rb_args_info and ID *tbl internals)
 - 11.JAN.2016 - 0.2.0
       - Bugfix: || and && in NODE_OP_ASGN1 (e.g. in x['a'] ||= 'b' or x['b'] &&= false)
         (this bug caused segfaults in some cases)
