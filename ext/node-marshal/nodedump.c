@@ -1878,7 +1878,7 @@ static VALUE m_nodedump_to_hash(VALUE self)
 
 VALUE m_node_to_ary(NODE *node)
 {
-	int i, j, type, ut[3];
+	int i, type, ut[3];
 	VALUE uref[3];
 	VALUE entry = rb_ary_new();
 	/* Special case: NULL node */
@@ -1939,8 +1939,8 @@ VALUE m_node_to_ary(NODE *node)
 		{
 			VALUE rargs = rb_hash_new();
 			VALUE rargs_env = rb_ary_new();
-			ID id;
 #ifdef USE_RB_ARGS_INFO
+			ID id;
 			struct rb_args_info *args = (void *) uref[i];
 
 			rb_hash_aset(rargs, ID2SYM(rb_intern("pre_init")), m_node_to_ary(args->pre_init));

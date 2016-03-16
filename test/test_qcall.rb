@@ -46,7 +46,7 @@ puts "'#{b&.owner_info&.address}'"
 			res_text = eval(qcall_program)
 			assert_equal(res_text, res_node)
 		else
-			assert_true(false, "Ruby 2.3 or higher is required for &. operator test")
+			assert_equal(false, true, "Ruby 2.3 or higher is required for &. operator test")
 		end
 	end
 end
