@@ -24,6 +24,9 @@
    more than 1 element the 2nd child of 2nd element will contain
    a reference to the last element of the array (and have NT_NODE
    not NT_LONG type)
+   Another case is Hash: every 2nd element of NODE_ARRAY chain
+   has NT_NODE type (see nodedump.c for details)
+
    Such child is ignored by GC because there is a reference to it
    from another place of Ruby AST.
  */

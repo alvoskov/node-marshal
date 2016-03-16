@@ -84,8 +84,8 @@ EOS
 
 	# call-seq:
 	#   NodeMarshal::compile_rb_file(outfile, inpfile, opts)
-	# 
-   # Reads +.rb+ file (Ruby source) and compiles it to .rb file containing
+	#
+	# Reads +.rb+ file (Ruby source) and compiles it to .rb file containing
 	# compressed AST node and its loader. This functions is an envelope for
 	# NodeMarshal#to_compiled_rb
 	def self.compile_rb_file(outfile, inpfile, *args)
@@ -167,7 +167,7 @@ EOS
 				"q#{pos}"
 			end
 		end
-		[symbols_ary, aliases_ary].transpose.to_h		
+		[symbols_ary, aliases_ary].transpose.to_h
 	end
 
 	# call-seq:

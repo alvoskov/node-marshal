@@ -39,6 +39,7 @@ puts "'#{b&.owner_info&.address}'"
 		ver = (ver[0] + ver[2] + ver[4]).to_i
 		if ver >= 230
 			node = NodeMarshal.new(:srcmemory, qcall_program)
+			node.show_offsets = true
 			bindump =  node.to_bin
 			node = NodeMarshal.new(:binmemory, bindump)
 			res_node = node.compile.eval

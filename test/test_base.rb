@@ -36,7 +36,7 @@ def fact(n)
 end
 ni.map {|x| fact(x) }
 EOS
-		assert_node_compiler(program)		
+		assert_node_compiler(program)
 	end
 
 	# Simple ROT13 task that combines several language construction
@@ -183,6 +183,13 @@ EOS
 		assert_node_compiler(program)
 	end
 
+	# Tests correct processing of nodes with "#{expr}"--style strings
+	# (correct processing of NODE_ARRAY chain inside NODE_DSTR node)
+	def test_dstr
+		program = 'a = "#{1} and #{2*2} and #{3*3} and #{4*4}"'
+		assert_node_compiler(program)
+	end
+
 	# Check the reaction on the parsing errors during the node creation
 	# In the case of syntax error ArgumentError exception should be generated
 	def test_syntax_error
@@ -203,7 +210,7 @@ EOS
 		rescue ArgumentError
 			test_passed = true
 		end
-		assert_equal(test_passed, true);	
+		assert_equal(test_passed, true);
 	end
 
 	# Part of the tests: compare result of direct usage of eval

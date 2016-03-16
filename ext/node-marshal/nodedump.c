@@ -348,9 +348,10 @@ static int dump_node_value(NODEInfo *info, char *ptr, NODE *node, int type, VALU
 		}
 		else if (TYPE(value) != T_NODE)
 		{
-			rb_raise(rb_eArgError, "dump_node_value, parent node %s: child node %d (ADR 0x%s): is not a node\n"
+			rb_raise(rb_eArgError, "dump_node_value, parent node %s (ADR 0x%s): child node %d (ADR 0x%s): is not a node\n"
 				"  Type: %s (%d), Value: %s",
-				ruby_node_name(nd_type(node)), child_id, RSTRING_PTR(value_to_str(value)),
+				ruby_node_name(nd_type(node)), RSTRING_PTR(value_to_str((VALUE) node)),
+				child_id, RSTRING_PTR(value_to_str(value)),
 				RSTRING_PTR(rb_funcall(rb_funcall(value, rb_intern("class"), 0), rb_intern("to_s"), 0)),
 				TYPE(value),
 				RSTRING_PTR(rb_funcall(value, rb_intern("to_s"), 0)) );
@@ -360,8 +361,9 @@ static int dump_node_value(NODEInfo *info, char *ptr, NODE *node, int type, VALU
 			VALUE id = LeafTableInfo_keyToID(&info->nodes, value_to_str(value));
 			if (id == (VALUE) -1)
 			{
-				rb_raise(rb_eArgError, "dump_node_value, parent node %s: child node %d (ADR 0x%s) not found",
-					ruby_node_name(nd_type(node)), child_id, RSTRING_PTR(value_to_str(value)));
+				rb_raise(rb_eArgError, "dump_node_value, parent node %s (ADR 0x%s): child node %d (ADR 0x%s) not found",
+					ruby_node_name(nd_type(node)), RSTRING_PTR(value_to_str((VALUE) node)),
+					child_id, RSTRING_PTR(value_to_str(value)));
 				return VL_RAW;
 			}
 			else
@@ -480,16 +482,23 @@ static VALUE dump_nodes(NODEInfo *info)
 		
 		if (nt = NODE_ARRAY)
 		{
-			/* Special undocumented case: the second child of the
-			 * second element of an array contains reference to the 
-			 * last element (NT_NODE) not length (NT_LONG) */
+			/* Special undocumented cases:
+			 * 1) the second child of the second element of an array
+			 * contains reference to the last element (NT_NODE) not
+			 * length (NT_LONG)
+			 * 2) NODE_HASH: every second element in NODE_ARRAY chain
+			 * contains pointers to NODES (instead of lengths)
+			 * 3) NODE_DSTR: first node in NODE_ARRAY chain contains
+			 * pointer to NODE (instead of lengths) */
 			NODE *pnode1, *pnode2;
 			pnode1 = (NODE *) str_to_value(LeafTableInfo_keyToValue(&info->pnodes, value_to_str((VALUE) node)));
 			if (pnode1 != NULL && nd_type(pnode1) == NODE_ARRAY &&
 				(NODE *) pnode1->u3.value == node)
 			{
+				int nt2;
 				pnode2 = (NODE *) str_to_value(LeafTableInfo_keyToValue(&info->pnodes, value_to_str((VALUE) pnode1)));
-				if (nd_type(pnode2) != NODE_ARRAY ||
+				nt2 = nd_type(pnode2);
+				if ( (nt2 != NODE_ARRAY && nt2 != NODE_DSTR) ||
 				    (NODE *) pnode2->u1.value == pnode1 )
 				{
 					ut[1] = NT_NODE;
@@ -498,6 +507,10 @@ static VALUE dump_nodes(NODEInfo *info)
 				{
 					ut[1] = NT_NODE;
 				}
+			}
+			else if (pnode1 != NULL && nd_type(pnode1) == NODE_DSTR)
+			{
+				ut[1] = NT_NODE;
 			}
 		}
 
@@ -1028,7 +1041,7 @@ void resolve_syms_ords(VALUE data, NODEObjAddresses *relocs)
 	{
 		VALUE r_sym = RARRAY_PTR(tbl_val)[i];
 		if (TYPE(r_sym) == T_STRING)
-		{
+		{	/* Created symbol will be immune to garbage collector */
 			relocs->syms_adr[i] = rb_intern(RSTRING_PTR(r_sym));
 		}
 		else if (TYPE(r_sym) == T_FIXNUM)
@@ -1057,7 +1070,10 @@ void resolve_lits_ords(VALUE data, NODEObjAddresses *relocs)
 	relocs->lits_adr = RARRAY_PTR(tbl_val);
 	relocs->lits_len = RARRAY_LEN(tbl_val);
 	/* Mark all symbols as "immortal" (i.e. not collectable
-	   by Ruby GC): some of them can be used in the syntax tree! */
+	   by Ruby GC): some of them can be used in the syntax tree!
+	   See the presentation of Narihiro Nakamura, author of 
+	   symbol GC in Ruby 2.x for details
+	   http://www.slideshare.net/authorNari/symbol-gc  */
 	for (i = 0; i < relocs->lits_len; i++)
 	{
 		if (TYPE(relocs->lits_adr[i]) == T_SYMBOL)
@@ -1318,10 +1334,9 @@ void load_nodes_from_str(VALUE data, NODEObjAddresses *relocs)
 
 		// Fill classic node structure
 		node = relocs->nodes_adr[i];
-//#ifdef RESET_GC_FLAGS
+#ifdef RESET_GC_FLAGS
 		flags = flags & (~0x3); // Ruby 1.9.x -- specific thing
-//#endif
-		//printf("%lX %lX\n", node->flags, (flags << 5) | T_NODE);
+#endif
 		node->flags = (flags << 5) | T_NODE;
 		node->nd_reserved = 0;
 		node->u1.value = u[0];
@@ -1883,10 +1898,6 @@ VALUE m_node_to_ary(NODE *node)
 	uref[1] = node->u2.value;
 	uref[2] = node->u3.value;
 
-//	if (type == NODE_ARRAY && (uref[1]) > 100)
-//	{
-//		printf("%s\n", ruby_node_name(nd_type(RNODE(uref[1]))));
-//	}
 
 	for (i = 0; i < 3; i++)
 	{
@@ -1987,7 +1998,9 @@ VALUE m_node_to_ary(NODE *node)
  *   obj.to_a
  *
  * Converts node to the array (mainly to allow exploration of AST
- * by the user)
+ * by the user). It shows information about rb_args_info and
+ * ID *tbl that are not displayed by NodeMarshal#dump_tree and
+ * NodeMarshal#dump_tree_short.
  */
 static VALUE m_nodedump_to_a(VALUE self)
 {
@@ -2253,9 +2266,11 @@ void Init_nodemarshal()
 
 	rb_define_method(cNodeMarshal, "initialize", RUBY_METHOD_FUNC(m_nodedump_init), 2);
 	rb_define_method(cNodeMarshal, "to_hash", RUBY_METHOD_FUNC(m_nodedump_to_hash), 0);
+	rb_define_method(cNodeMarshal, "to_h", RUBY_METHOD_FUNC(m_nodedump_to_hash), 0);
 	rb_define_method(cNodeMarshal, "to_bin", RUBY_METHOD_FUNC(m_nodedump_to_bin), 0);
 	rb_define_method(cNodeMarshal, "to_text", RUBY_METHOD_FUNC(m_nodedump_to_text), 0);
 	rb_define_method(cNodeMarshal, "to_a", RUBY_METHOD_FUNC(m_nodedump_to_a), 0);
+	rb_define_method(cNodeMarshal, "to_ary", RUBY_METHOD_FUNC(m_nodedump_to_a), 0);
 	rb_define_method(cNodeMarshal, "dump_tree", RUBY_METHOD_FUNC(m_nodedump_parser_dump_tree), 0);
 	rb_define_method(cNodeMarshal, "dump_tree_short", RUBY_METHOD_FUNC(m_nodedump_dump_tree_short), 0);
 	rb_define_method(cNodeMarshal, "compile", RUBY_METHOD_FUNC(m_nodedump_compile), 0);
