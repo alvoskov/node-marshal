@@ -27,7 +27,7 @@ irreversible and can be used for source code protection; the similar principle i
 software.
 EOS
 	s.author = "Alexey Voskov"
-	s.version = "0.2.1"
+	s.version = "0.2.2"
 	s.license = "BSD-2-Clause"
 	s.email = "alvoskov@gmail.com"
 	s.required_ruby_version = ">= 1.9.3"

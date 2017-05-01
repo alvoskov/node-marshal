@@ -29,6 +29,9 @@
 
    Such child is ignored by GC because there is a reference to it
    from another place of Ruby AST.
+
+   NODE_LASGN and NODE_DASGN_CURR have special value -1 of the 2nd
+   child (that is usually node not a number)
  */
 static int nodes_child_info[][4] = 
 {
@@ -38,11 +41,11 @@ static int nodes_child_info[][4] =
 	{NODE_CASE,     NT_NODE, NT_NODE, NT_NULL},
 	{NODE_WHEN,     NT_NODE, NT_NODE, NT_NODE},
 
-	{NODE_OPT_N,    NT_NULL, NT_NODE, NT_LONG}, // ???
+	{NODE_OPT_N,    NT_NULL, NT_NODE, NT_LONG}, /* ??? */
 	{NODE_WHILE,    NT_NODE, NT_NODE, NT_LONG},
 	{NODE_UNTIL,    NT_NODE, NT_NODE, NT_LONG},
 
-	{NODE_ITER,     NT_VALUE, NT_NODE, NT_NODE}, // ???
+	{NODE_ITER,     NT_VALUE, NT_NODE, NT_NODE}, /* ??? */
 	{NODE_FOR,      NT_VALUE, NT_NODE, NT_NODE},
 
 	{NODE_BREAK,    NT_NODE, NT_NULL, NT_NULL},
@@ -125,7 +128,7 @@ static int nodes_child_info[][4] =
 	{NODE_ARGSCAT, NT_NODE, NT_NODE, NT_NULL},
 	{NODE_ARGSPUSH, NT_NODE, NT_NODE, NT_NULL},
 	{NODE_SPLAT, NT_NODE, NT_NULL, NT_NULL},
-	{NODE_BLOCK_PASS, NT_NODE, NT_NODE, NT_NODE}, // ???
+	{NODE_BLOCK_PASS, NT_NODE, NT_NODE, NT_NODE}, /* ??? */
 
 	{NODE_DEFN, NT_NULL, NT_ID,   NT_NODE},
 	{NODE_DEFS, NT_NODE, NT_ID, NT_NODE},
@@ -163,9 +166,10 @@ static int nodes_child_info[][4] =
 	{NODE_POSTARG,  NT_NODE, NT_NODE, NT_NULL},
 
 #ifdef USE_RB_ARGS_INFO
-	{NODE_ARGS,     NT_NULL,    NT_VALUE,    NT_ARGS}, // ???
+	{NODE_ARGS,     NT_NULL,    NT_VALUE,    NT_ARGS}, /* ??? */
+	{NODE_KW_ARG,	NT_NULL,    NT_NODE,     NT_NODE},
 #else
-	{NODE_ARGS,     NT_NODE,    NT_NULL,    NT_NODE}, // ???
+	{NODE_ARGS,     NT_NODE,    NT_NULL,    NT_NODE}, /* ??? */
 #endif
 	{NODE_SCOPE,    NT_IDTABLE, NT_NODE,    NT_NODE},
 

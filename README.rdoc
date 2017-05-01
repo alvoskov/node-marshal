@@ -17,6 +17,13 @@ The key features of node-marshal gem:
 - 2-clause BSD license suitable for creation of custom source code protection system
 
 Changelog:
+- 01.MAY.2017 - 0.2.2
+      - Bugfix: NODE_KW_ARG processing implementation. Allows to use keyword (named) arguments
+        in Ruby 2.x. (thanks to Jarosław Salik for bugreport).
+      - Bugfix: NODE_LASGN and NODE_DASGN_CURR 2nd child special cases (-1 value). Mainly for
+        their usage inside NODE_KW_ARG child trees.
+      - test_namedarg.rb test was added (for so called keyword argument)
+      - Improved output of dump_tree_short (rb_args_info dump)
 - 16.MAR.2016 - 0.2.1
       - Bugfix: garbage collection of symbols kept in the literals table of the node dump
         is now prohibited. Such GC caused hardly reproducible bugs after code loading.

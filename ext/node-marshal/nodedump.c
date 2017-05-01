@@ -2,7 +2,7 @@
  * This file contains implementation of classes for Ruby nodes
  * marshalization (i.e. loading and saving them from disk)
  * 
- * (C) 2015-2016 Alexey Voskov
+ * (C) 2015-2017 Alexey Voskov
  * License: BSD-2-Clause
  */
 #define __STDC_FORMAT_MACROS
@@ -459,6 +459,9 @@ static VALUE dump_nodes(NODEInfo *info)
 		ut[0] = nodes_ctbl[nt * 3];
 		ut[1] = nodes_ctbl[nt * 3 + 1];
 		ut[2] = nodes_ctbl[nt * 3 + 2];
+		if ((nt == NODE_LASGN || nt == NODE_DASGN_CURR) && (void *) node->u2.value == (void *) -1) {
+			ut[1] = NT_LONG;
+		}
 		if (nt == NODE_OP_ASGN2 && LeafTableInfo_keyToID(&info->syms, INT2FIX(node->u1.value)) != -1)
 		{
 			ut[0] = NT_ID; ut[1] = NT_ID; ut[2] = NT_ID;
@@ -670,8 +673,10 @@ static int count_num_of_nodes(NODE *node, NODE *parent, NODEInfo *info)
 	}
 	else if (TYPE((VALUE) node) != T_NODE)
 	{
-		rb_raise(rb_eArgError, "count_num_of_nodes: parent node %s: child node (ADR 0x%s) is not a node; Type: %d",
-			ruby_node_name(nd_type(parent)), RSTRING_PTR(value_to_str((VALUE) node)), TYPE((VALUE) node));
+		rb_raise(rb_eArgError, "count_num_of_nodes: parent node %s: child node (ADR 0x%s) is not a node; Type: %d (%s)",
+			ruby_node_name(nd_type(parent)), RSTRING_PTR(value_to_str((VALUE) node)), TYPE((VALUE) node),
+			RSTRING_PTR(rb_funcall(rb_funcall((VALUE) node, rb_intern("class"), 0), rb_intern("to_s"), 0))
+		);
 		return 0;
 	}
 	else
@@ -681,6 +686,12 @@ static int count_num_of_nodes(NODE *node, NODE *parent, NODEInfo *info)
 		ut[1] = nodes_ctbl[offset++];
 		ut[2] = nodes_ctbl[offset];
 
+		/* Special case: part of NODE_KW_ARG syntax in Ruby 2.x, e.g. def func(foo:, bar: 'default) */
+		if ((nd_type(node) == NODE_LASGN || nd_type(node) == NODE_DASGN_CURR) && (void *) node->u2.value == (void *) -1) {
+			ut[1] = NT_LONG; /* To keep -1 correctly */
+		}
+
+		/* Some another special cases */
 		if (nd_type(node) == NODE_OP_ASGN2 && nd_type(parent) == NODE_OP_ASGN2)
 		{
 			ut[0] = NT_ID;
@@ -886,6 +897,24 @@ void rbstr_printf(VALUE str, const char *fmt, ...)
 	va_end(ptr);
 }
 
+const char *symid_to_cstr(ID symid)
+{
+	const char *str_null = "<NULL>", *str_intern = "<NONAME>";
+	const char *str_sym;
+
+	if (symid == 0)
+		str_sym = str_null;
+	else
+	{
+		VALUE rbstr_sym = rb_id2str(symid);
+		if (TYPE(rbstr_sym) == T_STRING)
+			str_sym = RSTRING_PTR(rb_id2str(symid));
+		else
+			str_sym = str_intern;
+	}
+	return str_sym;
+}
+
 #define PRINT_NODE_TAB for (j = 0; j < tab; j++) rbstr_printf(str, "  ");
 /*
  * Recursively transforms node into Ruby string
@@ -928,6 +957,11 @@ static void print_node(VALUE str, NODE *node, int tab, int show_offsets)
 	uref[1] = node->u2.value;
 	uref[2] = node->u3.value;
 
+	if ((type == NODE_LASGN || type == NODE_DASGN_CURR) && (void *) node->u2.value == (void *) -1)
+	{
+		ut[1] = NT_LONG;
+	}
+
 	for (i = 0; i < 3; i++)
 	{
 
@@ -966,21 +1000,8 @@ static void print_node(VALUE str, NODE *node, int tab, int show_offsets)
 		}
 		else if (ut[i] == NT_ID)
 		{
-			const char *str_null = "<NULL>", *str_intern = "<NONAME>";
-			const char *str_sym;
+			const char *str_sym = symid_to_cstr(uref[i]);
 			PRINT_NODE_TAB; rbstr_printf(str, "  ");
-
-			if (uref[i] == 0)
-				str_sym = str_null;
-			else
-			{
-				VALUE rbstr_sym = rb_id2str(uref[i]);
-				if (TYPE(rbstr_sym) == T_STRING)
-					str_sym = RSTRING_PTR(rb_id2str(uref[i]));
-				else
-					str_sym = str_intern;
-			}
-
 			if (show_offsets)
 				rbstr_printf(str, ">| ID: %d; SYMBOL: :%s\n", (ID) uref[i], str_sym);
 			else
@@ -998,8 +1019,47 @@ static void print_node(VALUE str, NODE *node, int tab, int show_offsets)
 		}
 		else if (ut[i] == NT_ARGS)
 		{
+#ifdef USE_RB_ARGS_INFO
+			struct rb_args_info *ainfo;
+#endif
 			PRINT_NODE_TAB; rbstr_printf(str, "  ");
 			rbstr_printf(str, ">| ARGS\n");
+#ifdef USE_RB_ARGS_INFO
+			ainfo = node->u3.args;
+			/* Print generic info about the structure */
+			PRINT_NODE_TAB; rbstr_printf(str, "    PRE_INIT:    %16" PRIxPTR "\n", ainfo->pre_init);
+			PRINT_NODE_TAB; rbstr_printf(str, "    POST_INIT:   %16" PRIxPTR "\n", ainfo->post_init);
+			PRINT_NODE_TAB; rbstr_printf(str, "    KW_ARGS:     %16" PRIxPTR "\n", ainfo->kw_args);
+			PRINT_NODE_TAB; rbstr_printf(str, "    KW_REST_ARG: %16" PRIxPTR "\n", ainfo->kw_rest_arg);
+			PRINT_NODE_TAB; rbstr_printf(str, "    OPT_ARGS:    %16" PRIxPTR "\n", ainfo->opt_args);
+			PRINT_NODE_TAB; rbstr_printf(str, "    pre_args_num:  %d\n", ainfo->pre_args_num);
+			PRINT_NODE_TAB; rbstr_printf(str, "    post_args_num: %d\n", ainfo->post_args_num);
+			/* Print information about symbols */
+			if (show_offsets)
+			{
+				PRINT_NODE_TAB; rbstr_printf(str, "    first_post_arg: %s (ID %X)\n",
+					symid_to_cstr(ainfo->first_post_arg), ainfo->first_post_arg);
+				PRINT_NODE_TAB; rbstr_printf(str, "    rest_arg:       %s (ID %X)\n",
+					symid_to_cstr(ainfo->rest_arg), ainfo->rest_arg);
+				PRINT_NODE_TAB; rbstr_printf(str, "    block_arg:      %s (ID %X)\n",
+					symid_to_cstr(ainfo->block_arg), ainfo->block_arg);
+			}
+			else 
+			{
+				PRINT_NODE_TAB; rbstr_printf(str, "    first_post_arg: %s\n",
+					symid_to_cstr(ainfo->first_post_arg));
+				PRINT_NODE_TAB; rbstr_printf(str, "    rest_arg:       %s\n",
+					symid_to_cstr(ainfo->rest_arg));
+				PRINT_NODE_TAB; rbstr_printf(str, "    block_arg:      %s\n",
+					symid_to_cstr(ainfo->block_arg));
+			}
+			/* Print information about child nodes */
+			print_node(str, RNODE(ainfo->pre_init), tab + 2, show_offsets);
+			print_node(str, RNODE(ainfo->post_init), tab + 2, show_offsets);
+			print_node(str, RNODE(ainfo->kw_args), tab + 2, show_offsets);
+			print_node(str, RNODE(ainfo->kw_rest_arg), tab + 2, show_offsets);
+			print_node(str, RNODE(ainfo->opt_args), tab + 2, show_offsets);
+#endif
 		}
 		else if (ut[i] == NT_IDTABLE)
 		{
